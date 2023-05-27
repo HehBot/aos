@@ -1,0 +1,9 @@
+BasedOnStyle: Webkit
+AlwaysBreakTemplateDeclarations: No
+SpaceAfterTemplateKeyword: false
+IncludeBlocks: Regroup
+PackConstructorInitializers: BinPack
+BreakConstructorInitializers: BeforeColon
+AlignOperands: AlignAfterOperator
+AlignAfterOpenBracket: Align
+IndentPPDirectives: BeforeHash
