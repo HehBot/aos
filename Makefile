@@ -15,7 +15,7 @@ C_SRCS := $(shell find $(SRC_DIR) -name "*.c")
 C_OBJS := $(C_SRCS:%=$(BUILD_DIR)/%.o)
 
 ASMFLAGS := -I$(SRC_DIR)
-CFLAGS := -Wall -Wextra -Werror -g -ffreestanding -nostdlib -MMD -MP -I$(SRC_DIR)/
+CFLAGS := -Wall -Wextra -Werror -g -ffreestanding -nostdlib -MMD -MP -I$(SRC_DIR)/ -masm=intel
 
 DISK := $(BUILD_DIR)/disk.bin
 BOOT_BIN := $(BUILD_DIR)/$(SRC_DIR)/boot/main.s.bin
@@ -26,8 +26,8 @@ run: $(DISK)
 	$(VM) $<
 
 debug: $(DISK) $(KERNEL_ELF)
-	$(VM) -s -S $< &
-	$(GDB) -ex "target remote localhost:1234" -ex "symbol-file $(KERNEL_ELF)"
+	$(VM) -gdb tcp::1234 -S $< &
+	$(GDB) -ex "target remote tcp::1234" -ex "symbol-file $(KERNEL_ELF)"
 
 $(DISK): $(BOOT_BIN) $(KERNEL_BIN) Makefile
 	@mkdir -p $(dir $@)
