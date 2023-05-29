@@ -17,7 +17,7 @@ disk_load:
 
 .disk_error:
         mov     si, DISK_ERROR_MSG
-        call    puts
+        call    puts_16
         jmp     $
 
 DISK_ERROR_MSG db "Disk read error!", 0

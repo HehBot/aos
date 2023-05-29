@@ -1,5 +1,5 @@
 ; print character in al
-putc:
+putc_16:
         push    ax
         push    bx
         mov     ah, 0x0e
@@ -9,7 +9,7 @@ putc:
         ret
 
 ; print null-ended string at address si
-puts:
+puts_16:
         push    ax
         push    bx
         push    si
@@ -28,7 +28,7 @@ puts:
         ret
 
 ; print hex number in dx
-print_hex:
+print_hex_16:
         push    ax
         push    bx
         push    cx
