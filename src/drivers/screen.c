@@ -1,6 +1,7 @@
 #include "screen.h"
 
 #include <cpu/port.h>
+#include <string.h>
 
 #define VIDEO_ADDRESS 0xb8000
 #define MAX_ROWS 25
@@ -35,10 +36,7 @@ static int handle_scrolling(int offset)
     if (shift <= 0)
         return offset;
 
-    for (int i = 0; i < MAX_ROWS * MAX_COLS - 1 - shift; ++i) {
-        vid_mem[2 * i] = vid_mem[2 * (i + shift)];
-        vid_mem[2 * i + 1] = vid_mem[2 * (i + shift) + 1];
-    }
+    memmove(vid_mem, vid_mem + 2 * shift, 2 * (MAX_ROWS * MAX_COLS - shift));
     for (int i = MAX_ROWS * MAX_COLS - 1 - shift; i < MAX_ROWS * MAX_COLS; ++i)
         vid_mem[2 * i] = ' ';
     return offset - shift;

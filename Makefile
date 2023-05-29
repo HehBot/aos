@@ -15,7 +15,7 @@ C_SRCS := $(shell find $(SRC_DIR) -name "*.c")
 C_OBJS := $(C_SRCS:%=$(BUILD_DIR)/%.o)
 
 ASMFLAGS := -I$(SRC_DIR)
-CFLAGS := -Wall -Wextra -Werror -g -ffreestanding -nostdlib -MMD -MP -I$(SRC_DIR)/ -masm=intel
+CFLAGS := -Wall -Wextra -Werror -g -ffreestanding -nostdlib -MMD -MP -I$(SRC_DIR)/ -I$(SRC_DIR)/util -masm=intel
 
 DISK := $(BUILD_DIR)/disk.bin
 BOOT_BIN := $(BUILD_DIR)/$(SRC_DIR)/boot/main.s.bin
