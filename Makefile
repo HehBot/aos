@@ -11,7 +11,7 @@ BUILD_DIR := build
 SRCS := $(shell find $(SRC_DIR) -name "*.c" -or -name "*.s")
 DEPS := $(SRCS:%=$(BUILD_DIR)/%.d)
 
-ASMFLAGS := -I$(SRC_DIR)/
+ASMFLAGS := -I$(wildcard $(SRC_DIR)/*)
 
 DISK := $(BUILD_DIR)/disk.bin
 BOOT_BIN := $(BUILD_DIR)/$(SRC_DIR)/boot/main.s.bin
