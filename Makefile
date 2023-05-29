@@ -14,7 +14,7 @@ DEPS := $(SRCS:%=$(BUILD_DIR)/%.d)
 C_SRCS := $(shell find $(SRC_DIR) -name "*.c")
 C_OBJS := $(C_SRCS:%=$(BUILD_DIR)/%.o)
 
-ASMFLAGS := -I$(SRC_DIR)
+ASMFLAGS := -I$(SRC_DIR) -g
 CFLAGS := -Wall -Wextra -Werror -g -ffreestanding -nostdlib -MMD -MP -I$(SRC_DIR)/ -I$(SRC_DIR)/util -masm=intel
 
 DISK := $(BUILD_DIR)/disk.bin
@@ -35,11 +35,11 @@ $(DISK): $(BOOT_BIN) $(KERNEL_BIN) Makefile
 	dd if=$(BOOT_BIN) of=$@ bs=512 seek=0 count=1 conv=notrunc
 	dd if=$(KERNEL_BIN) of=$@ bs=512 seek=1 count=15 conv=notrunc
 
-$(KERNEL_BIN): $(BUILD_DIR)/$(SRC_DIR)/boot/kernel_entry.s.o $(C_OBJS)
+$(KERNEL_BIN): $(BUILD_DIR)/$(SRC_DIR)/boot/kernel_entry.s.o $(C_OBJS) $(BUILD_DIR)/$(SRC_DIR)/cpu/interrupt.s.o
 	@mkdir -p $(dir $@)
 	$(LD) -o $@ -Ttext 0x1000 $^ --oformat binary
 
-$(KERNEL_ELF): $(BUILD_DIR)/$(SRC_DIR)/boot/kernel_entry.s.o $(C_OBJS)
+$(KERNEL_ELF): $(BUILD_DIR)/$(SRC_DIR)/boot/kernel_entry.s.o $(C_OBJS) $(BUILD_DIR)/$(SRC_DIR)/cpu/interrupt.s.o
 	@mkdir -p $(dir $@)
 	$(LD) -o $@ -Ttext 0x1000 $^
 
