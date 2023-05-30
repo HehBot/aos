@@ -1,6 +1,5 @@
-#include "interrupt.h"
-#include "port.h"
-
+#include <cpu/interrupt.h>
+#include <cpu/port.h>
 #include <stdint.h>
 #include <stdio.h>
 

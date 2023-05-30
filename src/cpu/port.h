@@ -20,6 +20,8 @@
 #define PORT_PIT_CHANNEL1_DATA 0x41
 #define PORT_PIT_CHANNEL2_DATA 0x42
 
+#define PORT_KEYBOARD_DATA 0x60
+
 uint8_t port_read_byte(uint16_t port);
 uint16_t port_read_word(uint16_t port);
 

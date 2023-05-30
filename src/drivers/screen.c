@@ -46,6 +46,9 @@ static size_t handle_scrolling(size_t offset)
 
 void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_t bg_color)
 {
+    if (character == '\0')
+        return;
+
     if (fg_color > 0xf || bg_color > 0xf) {
         fg_color = SCREEN_COLOR_BLACK;
         bg_color = SCREEN_COLOR_WHITE;
