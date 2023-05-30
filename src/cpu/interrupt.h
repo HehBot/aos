@@ -10,6 +10,4 @@ typedef struct {
     unsigned int eip, cs, eflags, useresp, ss;
 } __attribute__((packed)) cpu_state_t;
 
-void isr_install();
-
 #endif // INTERRUPT_H

@@ -31,9 +31,9 @@ debug: $(DISK) $(KERNEL_ELF)
 
 $(DISK): $(BOOT_BIN) $(KERNEL_BIN) Makefile
 	@mkdir -p $(dir $@)
-	dd if=/dev/zero of=$@ bs=1 count=0 seek=8192
-	dd if=$(BOOT_BIN) of=$@ bs=512 seek=0 count=1 conv=notrunc
-	dd if=$(KERNEL_BIN) of=$@ bs=512 seek=1 count=15 conv=notrunc
+	dd if=/dev/zero of=$@ bs=1 count=0 seek=8192 status=none
+	dd if=$(BOOT_BIN) of=$@ bs=512 seek=0 count=1 conv=notrunc status=none
+	dd if=$(KERNEL_BIN) of=$@ bs=512 seek=1 count=15 conv=notrunc status=none
 
 $(KERNEL_BIN): $(BUILD_DIR)/$(SRC_DIR)/boot/kernel_entry.s.o $(C_OBJS) $(BUILD_DIR)/$(SRC_DIR)/cpu/interrupt.s.o
 	@mkdir -p $(dir $@)

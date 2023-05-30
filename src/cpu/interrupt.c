@@ -1,6 +1,6 @@
 #include "interrupt.h"
 
-#include <drivers/screen.h>
+#include <stdio.h>
 
 typedef struct {
     unsigned short low_offset;
@@ -110,14 +110,6 @@ void isr_install()
 
 void isr_common(cpu_state_t* cpu_state)
 {
-    char const* z = "0123456789ABCDEF";
-    puts("Received interrupt 0x");
-    int shift = 28;
-    while (shift >= 0) {
-        putc(z[(cpu_state->int_no >> shift) & 0xf]);
-        shift -= 4;
-    }
-    putc('\n');
     char const* exception_messages[] = {
         "Division By Zero",
         "Debug",
@@ -155,6 +147,5 @@ void isr_common(cpu_state_t* cpu_state)
         "Reserved",
         "Reserved"
     };
-    puts(exception_messages[cpu_state->int_no]);
-    putc('\n');
+    printf("Received interrupt %hhu\n    %s\n", cpu_state->int_no, exception_messages[cpu_state->int_no]);
 }
