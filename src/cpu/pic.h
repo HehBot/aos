@@ -1,8 +1,10 @@
 #ifndef PIC_H
 #define PIC_H
 
-void PIC_send_EOI(unsigned char irq);
-void PIC_remap(unsigned char offset1, unsigned char offset2);
-void PIC_set_mask(unsigned short int m);
+#include <stdint.h>
+
+void PIC_send_EOI(uint8_t irq);
+void PIC_remap(uint8_t offset1, uint8_t offset2);
+void PIC_set_mask(uint16_t m);
 
 #endif // PIC_H

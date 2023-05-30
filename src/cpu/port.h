@@ -1,6 +1,8 @@
 #ifndef PORT_H
 #define PORT_H
 
+#include <stdint.h>
+
 #define PORT_SCREEN 0x3d4
 #define PORT_SCREEN_CTRL (PORT_SCREEN)
 #define PORT_SCREEN_DATA (PORT_SCREEN + 1)
@@ -18,10 +20,10 @@
 #define PORT_PIT_CHANNEL1_DATA 0x41
 #define PORT_PIT_CHANNEL2_DATA 0x42
 
-unsigned char port_read_byte(unsigned short port);
-unsigned short port_read_word(unsigned short port);
+uint8_t port_read_byte(uint16_t port);
+uint16_t port_read_word(uint16_t port);
 
-void port_write_byte(unsigned short port, unsigned char data);
-void port_write_word(unsigned short port, unsigned short data);
+void port_write_byte(uint16_t port, uint8_t data);
+void port_write_word(uint16_t port, uint16_t data);
 
 #endif // PORT_H

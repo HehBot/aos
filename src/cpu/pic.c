@@ -1,6 +1,8 @@
 #include "port.h"
 
-void PIC_send_EOI(unsigned char irq)
+#include <stdint.h>
+
+void PIC_send_EOI(uint8_t irq)
 {
 #define PIC_EOI 0x20
     if (irq >= 8)
@@ -13,7 +15,7 @@ void PIC_send_EOI(unsigned char irq)
  *  Master/slave wiring ICW3
  *  Additional info ICW4
  */
-void PIC_remap(unsigned char offset1, unsigned char offset2)
+void PIC_remap(uint8_t offset1, uint8_t offset2)
 {
 #define ICW1_ICW4 0x01 // ICW4 is present
 #define ICW1_ICW_SINGLE 0x02 // Single (cascade) mode
@@ -28,8 +30,8 @@ void PIC_remap(unsigned char offset1, unsigned char offset2)
 #define ICW4_SFNM 0x10 // Special fully nested (not)
 
     // save masks
-    unsigned char a1 = port_read_byte(PORT_PIC1_DATA);
-    unsigned char a2 = port_read_byte(PORT_PIC2_DATA);
+    uint8_t a1 = port_read_byte(PORT_PIC1_DATA);
+    uint8_t a2 = port_read_byte(PORT_PIC2_DATA);
 
     // ICW1 Initialise in cascade mode
     port_write_byte(PORT_PIC1_CTRL, ICW1_INIT | ICW1_ICW4);
@@ -53,7 +55,7 @@ void PIC_remap(unsigned char offset1, unsigned char offset2)
 }
 
 // when mask bit is set corresponding IRQ is ignored
-void PIC_set_mask(unsigned short int m)
+void PIC_set_mask(uint16_t m)
 {
     port_write_byte(PORT_PIC1_DATA, m & 0xff);
     port_write_byte(PORT_PIC2_DATA, (m >> 8) & 0xff);

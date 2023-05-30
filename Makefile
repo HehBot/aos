@@ -2,7 +2,7 @@ ASM := nasm
 CC := i386-elf-gcc
 LD := i386-elf-ld
 
-VM := qemu-system-i386
+EMU := qemu-system-i386
 GDB := gdb
 
 SRC_DIR := src
@@ -23,10 +23,10 @@ KERNEL_BIN := $(BUILD_DIR)/$(SRC_DIR)/kernel/kernel.bin
 KERNEL_ELF := $(KERNEL_BIN:.bin=.elf)
 
 run: $(DISK)
-	$(VM) $<
+	$(EMU) -drive file=$<,format=raw,media=disk
 
 debug: $(DISK) $(KERNEL_ELF)
-	$(VM) -gdb tcp::1234 -S $< &
+	$(EMU) -gdb tcp::1234 -S -drive file=$<,format=raw,media=disk &
 	$(GDB) -ex "target remote tcp::1234" -ex "symbol-file $(KERNEL_ELF)"
 
 $(DISK): $(BOOT_BIN) $(KERNEL_BIN) Makefile

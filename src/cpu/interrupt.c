@@ -2,19 +2,21 @@
 
 #include "pic.h"
 
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 typedef struct {
-    unsigned short low_offset;
-    unsigned short seg;
-    unsigned char always0;
-    unsigned char flags;
-    unsigned short high_offset;
+    uint16_t low_offset;
+    uint16_t seg;
+    uint8_t always0;
+    uint8_t flags;
+    uint16_t high_offset;
 } __attribute__((packed)) idt_entry_t;
 
 typedef struct {
-    unsigned short limit;
-    unsigned int base;
+    uint16_t limit;
+    uint32_t base;
 } __attribute__((packed)) idt_register_t;
 
 #define IDT_ENTRIES 256
@@ -22,7 +24,7 @@ static idt_entry_t idt[IDT_ENTRIES];
 static idt_register_t idt_reg;
 static isr_t isr_handlers[IDT_ENTRIES];
 
-static void set_idt_entry(unsigned int n, unsigned int isr)
+static void set_idt_entry(uint32_t n, uint32_t isr)
 {
     idt[n].low_offset = (isr & 0xffff);
     idt[n].seg = 0x8; // kernel code segment
@@ -33,7 +35,7 @@ static void set_idt_entry(unsigned int n, unsigned int isr)
 
 static void set_idt()
 {
-    idt_reg.base = (unsigned int)&idt;
+    idt_reg.base = (uint32_t)&idt;
     idt_reg.limit = IDT_ENTRIES * sizeof(idt_entry_t) - 1;
     asm("lidt [%0]"
         :
@@ -92,10 +94,10 @@ D_irq(46);
 D_irq(47);
 void isr_install()
 {
-    for (unsigned int i = 0; i < IDT_ENTRIES; ++i)
+    for (size_t i = 0; i < IDT_ENTRIES; ++i)
         isr_handlers[i] = 0;
 
-#define I_excep(z) set_idt_entry(z, (unsigned int)isr_##z##_excep)
+#define I_excep(z) set_idt_entry(z, (uint32_t)isr_##z##_excep)
     I_excep(0);
     I_excep(1);
     I_excep(2);
@@ -131,7 +133,7 @@ void isr_install()
 
     PIC_remap(32, 40);
     PIC_set_mask(0x00);
-#define I_irq(z) set_idt_entry(z, (unsigned int)isr_##z##_irq)
+#define I_irq(z) set_idt_entry(z, (uint32_t)isr_##z##_irq)
     I_irq(32);
     I_irq(33);
     I_irq(34);
@@ -205,7 +207,7 @@ void isr_irq_common(cpu_state_t* cpu_state)
     }
 }
 
-void register_isr_handler(unsigned char n, isr_t handler)
+void register_isr_handler(uint8_t n, isr_t handler)
 {
     isr_handlers[n] = handler;
 }

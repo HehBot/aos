@@ -1,9 +1,10 @@
 #include <cpu/interrupt.h>
 #include <cpu/timer.h>
+#include <stdint.h>
 #include <stdio.h>
 
-static unsigned int time;
-static unsigned int freq;
+static uint32_t time;
+static uint32_t freq;
 
 static void timer_callback(cpu_state_t*)
 {

@@ -3,6 +3,8 @@
 
 #include "interrupt.h"
 
-void init_timer(unsigned int freq, isr_t timer_callback);
+#include <stdint.h>
+
+void init_timer(uint32_t freq, isr_t timer_callback);
 
 #endif // TIMER_H

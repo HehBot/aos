@@ -1,6 +1,12 @@
 #ifndef SCREEN_H
 #define SCREEN_H
 
+#include <stddef.h>
+#include <stdint.h>
+
+#define SCREEN_MAX_ROWS 25
+#define SCREEN_MAX_COLS 80
+
 #define SCREEN_COLOR_BLACK 0
 #define SCREEN_COLOR_BLUE 1
 #define SCREEN_COLOR_GREEN 2
@@ -18,7 +24,7 @@
 #define SCREEN_COLOR_LIGHTBROWN 14
 #define SCREEN_COLOR_WHITE 15
 
-void print_char(char character, int col, int row, unsigned char fg_color, unsigned char bg_color);
+void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_t bg_color);
 void clear_screen();
 
 void puts(char const* str);

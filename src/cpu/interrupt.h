@@ -1,6 +1,8 @@
 #ifndef INTERRUPT_H
 #define INTERRUPT_H
 
+#include <stdint.h>
+
 #define IRQ0 32
 #define IRQ1 33
 #define IRQ2 34
@@ -19,15 +21,15 @@
 #define IRQ15 47
 
 typedef struct {
-    unsigned int ds;
+    uint32_t ds;
 
-    unsigned int edi, esi, ebp, useless_esp, ebx, edx, ecx, eax;
+    uint32_t edi, esi, ebp, useless_esp, ebx, edx, ecx, eax;
 
-    unsigned int int_no, err_code;
-    unsigned int eip, cs, eflags, useresp, ss;
+    uint32_t int_no, err_code;
+    uint32_t eip, cs, eflags, useresp, ss;
 } __attribute__((packed)) cpu_state_t;
 
 typedef void (*isr_t)(cpu_state_t*);
-void register_isr_handler(unsigned char n, isr_t handler);
+void register_isr_handler(uint8_t n, isr_t handler);
 
 #endif // INTERRUPT_H
