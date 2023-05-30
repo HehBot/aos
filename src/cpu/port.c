@@ -23,7 +23,7 @@ void port_write_byte(unsigned short port, unsigned char data)
 }
 void port_write_word(unsigned short port, unsigned short data)
 {
-    asm inline("out dx, al"
+    asm inline("out dx, ax"
                :
                : "a"(data), "d"(port));
 }

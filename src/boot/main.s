@@ -26,7 +26,7 @@ start:
         mov     dl, byte [BOOT_DRIVE]
         call    disk_load
 
-        cli
+        cli                             ; disable interrupts
         lgdt    [gdt_descriptor]
         mov     eax, cr0
         or      eax, 0x1
@@ -57,6 +57,8 @@ init_pm:
         mov     ebp, 0x90000
         mov     ss, ax
         mov     esp, ebp
+
+        sti                             ; enable interrupts
 
         mov     esi, MSG_PROT_MODE
         call    puts
