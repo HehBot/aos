@@ -1,11 +1,11 @@
-; loads dh sectors to address es:bx from disk drive dl
+; loads dh sectors from sector cl onwards to address es:bx from disk drive dl
 disk_load:
         push    dx
         mov     ah, 0x02
         mov     al, dh          ; number of sectors
         mov     ch, 0x0         ; cylinder
         mov     dh, 0x0         ; head
-        mov     cl, 0x02        ; start reading from second sector (ie the sector after boot sector)
+                                ; start reading from sector cl (boot sector is sector 1)
 
         int     0x13
         jc      .disk_error

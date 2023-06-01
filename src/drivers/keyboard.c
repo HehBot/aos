@@ -195,10 +195,8 @@ static char letter(uint8_t scancode)
 
 static void keyboard_callback(cpu_state_t*)
 {
-    /* The PIC leaves us the scancode in port 0x60 */
     uint8_t sc = port_read_byte(PORT_KEYBOARD_DATA);
-    printf("scancode: 0x%hhx, %c", sc, letter(sc));
-    printf("\n");
+    printf("scancode: 0x%hhx, %c\n", sc, letter(sc));
 }
 
 void init_keyboard()

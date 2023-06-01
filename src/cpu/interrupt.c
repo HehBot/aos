@@ -132,7 +132,7 @@ void isr_install()
     I_excep(31);
 
     PIC_remap(32, 40);
-    PIC_set_mask(0x00);
+    PIC_set_mask(0x0000);
 #define I_irq(z) set_idt_entry(z, (uint32_t)isr_##z##_irq)
     I_irq(32);
     I_irq(33);
@@ -193,7 +193,19 @@ void isr_excep_common(cpu_state_t* cpu_state)
         "Reserved",
         "Reserved"
     };
-    printf("Received exception %hhu\n    %s\n", cpu_state->int_no, exception_messages[cpu_state->int_no]);
+    printf("\
+Received exception %u (error code %u)\n\
+    %s\n\
+cs = 0x%x  ds = 0x%x  ss = 0x%x\n\
+eip = 0x%x  eflags = 0x%x  esp = 0x%x  ebp = 0x%x\n\
+edi = 0x%x  esi = 0x%x  edx = 0x%x  ebx = 0x%x  ecx = 0x%x  eax = 0x%x\n\
+",
+           cpu_state->int_no, cpu_state->err_code,
+           exception_messages[cpu_state->int_no],
+           cpu_state->cs, cpu_state->ds, cpu_state->ss,
+           cpu_state->eip, cpu_state->eflags, cpu_state->useresp, cpu_state->ebp,
+           cpu_state->edi, cpu_state->esi, cpu_state->edx, cpu_state->ebx, cpu_state->ecx, cpu_state->eax);
+
     asm("cli\r\nhlt");
 }
 

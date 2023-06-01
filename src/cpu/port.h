@@ -22,6 +22,16 @@
 
 #define PORT_KEYBOARD_DATA 0x60
 
+#define PORT_ATA_PRIMARY_DATA 0x1f0
+#define PORT_ATA_PRIMARY_ERR 0x1f1
+#define PORT_ATA_PRIMARY_SECCOUNT 0x1f2
+#define PORT_ATA_PRIMARY_LBA_LO 0x1f3
+#define PORT_ATA_PRIMARY_LBA_MID 0x1f4
+#define PORT_ATA_PRIMARY_LBA_HI 0x1f5
+#define PORT_ATA_PRIMARY_DRIVE_HEAD 0x1f6
+#define PORT_ATA_PRIMARY_COMM_REGSTAT 0x1f7
+#define PORT_ATA_PRIMARY_ALTSTAT_DCR 0x3f6
+
 uint8_t port_read_byte(uint16_t port);
 uint16_t port_read_word(uint16_t port);
 

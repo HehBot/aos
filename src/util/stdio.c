@@ -12,6 +12,9 @@
 static void putint(int* arg, int length, unsigned int base);
 static void putuint(int* arg, int length, unsigned int base);
 
+static char const l[] = "0123456789abcdef";
+static char buf[11];
+
 void __attribute__((cdecl)) printf(char const* fmt, ...)
 {
     int* argp = (int*)(&fmt);
@@ -71,6 +74,9 @@ void __attribute__((cdecl)) printf(char const* fmt, ...)
             case 'x':
                 putuint(argp++, length, 16);
                 break;
+            case '%':
+                putc('%');
+                break;
             default:
                 putc('%');
                 putc(*fmt);
@@ -86,8 +92,6 @@ void __attribute__((cdecl)) printf(char const* fmt, ...)
 
 static void putint(int* arg, int length, unsigned int base)
 {
-    char const* l = "0123456789abcdef";
-    char buf[11];
     int i = 0;
     switch (length) {
     case PRINTF_LENGTH_SHORT_SHORT: {
@@ -141,8 +145,6 @@ static void putint(int* arg, int length, unsigned int base)
 }
 static void putuint(int* arg, int length, unsigned int base)
 {
-    char const* l = "0123456789abcdef";
-    char buf[11];
     int i = 0;
     switch (length) {
     case PRINTF_LENGTH_SHORT_SHORT: {

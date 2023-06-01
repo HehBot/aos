@@ -24,6 +24,7 @@
 #define SCREEN_COLOR_LIGHTBROWN 14
 #define SCREEN_COLOR_WHITE 15
 
+void init_screen(uint32_t addr);
 void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_t bg_color);
 void clear_screen();
 

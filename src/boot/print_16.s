@@ -1,10 +1,9 @@
-; print character in al
+; print character in si
 putc_16:
         push    ax
-        push    bx
+        mov     ax, si
         mov     ah, 0x0e
         int     0x10
-        pop     bx
         pop     ax
         ret
 

@@ -18,7 +18,7 @@ isr_%1_%2:
 
 ; see https://wiki.osdev.org/Exceptions
 isr_excep_stub:
-        pusha   ; pushes eax, ecx, edx, ebx, esp, ebp, esi, edi in thst order
+        pusha   ; pushes eax, ecx, edx, ebx, esp, ebp, esi, edi in that order
         mov     ax, ds
         push    eax
         mov     ax, 0x10

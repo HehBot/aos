@@ -8,7 +8,7 @@ start:
         mov     ds, ax
         mov     es, ax
 
-        mov     bp, 0x8000
+        mov     bp, 0xfff0
         mov     ss, ax
         mov     sp, bp
 
@@ -20,14 +20,25 @@ start:
         mov     si, MSG_LOAD_KERNEL
         call    puts_16
 
+        ; load initial paging structures
+        mov     bx, 0x8000
+        mov     dh, 16
+        mov     dl, byte [BOOT_DRIVE]
+        mov     cl, 2
+        call    disk_load
+
         ; load kernel
         mov     bx, KERNEL_OFFSET
         mov     dh, KERNEL_SECTORS_SIZE
         mov     dl, byte [BOOT_DRIVE]
+        mov     cl, 18
         call    disk_load
 
-        cli                             ; disable interrupts
+        ; disable interrupts and load GDT
+        cli
         lgdt    [gdt_descriptor]
+
+        ; switch to 32 bit protected mode
         mov     eax, cr0
         or      eax, 0x1
         mov     cr0, eax
@@ -58,7 +69,8 @@ init_pm:
         mov     ss, ax
         mov     esp, ebp
 
-        sti                             ; enable interrupts
+        ; enable interrupts
+        sti
 
         mov     esi, MSG_PROT_MODE
         call    puts

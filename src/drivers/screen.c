@@ -5,9 +5,12 @@
 #include <stdint.h>
 #include <string.h>
 
-#define VIDEO_ADDRESS 0xb8000
+static uint8_t* vid_mem;
 
-static uint8_t* const vid_mem = (uint8_t*)VIDEO_ADDRESS;
+void init_screen(uint32_t addr)
+{
+    vid_mem = (uint8_t*)addr;
+}
 
 static size_t get_screen_offset(size_t cols, size_t rows)
 {
