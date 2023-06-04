@@ -4,34 +4,23 @@
 #include <stdint.h>
 #include <stdio.h>
 
-void __attribute__((cdecl)) main(uint32_t page_dir_virtual_start, uint32_t page_dir_physical_start, uint32_t screen_virtual_start, uint32_t screen_physical_start, uint32_t kernel_virtual_start, uint32_t kernel_virtual_end, uint32_t kernel_physical_start, uint32_t kernel_physical_end)
+void __attribute__((cdecl)) main(uint32_t page_dir_start, uint32_t gdt_start, uint32_t screen_start, uint32_t screen_physical_start, uint32_t kernel_start, uint32_t kernel_end, uint32_t kernel_physical_start, uint32_t kernel_physical_end)
 {
-    init_screen(screen_virtual_start);
+    init_screen(screen_start);
     init_keyboard();
 
-    //     uint32_t* x = (uint32_t*)page_dir_virtual_start;
-    //     x[0] = 0x2;
-
     printf("\
-Page dir at\n\
+Page dir at 0x%x\n\
+GDT at      0x%x\n\
+Screen at   0x%x\n\
     Physical addr   0x%x\n\
-    Virtual addr    0x%x\n\
-Screen at\n\
-    Physical addr   0x%x\n\
-    Virtual addr    0x%x\n\
-Kernel at\n\
+Kernel at   0x%x - 0x%x\n\
     Physical addr   0x%x - 0x%x\n\
-    Virtual addr    0x%x - 0x%x\n\
 ",
-           page_dir_physical_start, page_dir_virtual_start,
-           screen_physical_start, screen_virtual_start,
-           kernel_physical_start, kernel_physical_end, kernel_virtual_start, kernel_virtual_end);
-
-    //     // enable access to the 4MB page statring at 0xffc00000
-    //     uint32_t* z = (uint32_t*)page_dir_virtual_start;
-    //     uint32_t addr = 0xffc00000;
-    //     z[addr >> 22] = 0x00400083;
-    //     uint32_t* y = (uint32_t*)0xfffff000;
-    //     *y = 0xcafebabe;
-    //     printf("0x%x\n", *y);
+           page_dir_start,
+           gdt_start,
+           screen_start,
+           screen_physical_start,
+           kernel_start, kernel_end,
+           kernel_physical_start, kernel_physical_end);
 }

@@ -4,33 +4,42 @@ SECTIONS
 {
     . = 1M;
 
-    kernel_physical_start = .;
-    kernel_virtual_start = .;
     screen_physical_start = 0xB8000;
-    screen_virtual_start = 0xB8000;
+    _kernel_start = .;
 
-    .text BLOCK(4K) : ALIGN(4K)
+    .multiboot.data :
     {
-        *(.multiboot)
-        *(.text)
+        *(.multiboot.data)
+    }
+    .multiboot.text :
+    {
+        *(.multiboot.text)
     }
 
-    .rodata BLOCK(4K) : ALIGN(4K)
+    kernel_physical_start = .;
+    . += 0xC0000000;
+    kernel_start = .;
+    screen_start = 0xC03FF000;
+
+    .text ALIGN (4K) : AT (ADDR (.text) - 0xC0000000)
+    {
+        *(.text)
+    }
+    .rodata ALIGN (4K) : AT (ADDR (.rodata) - 0xC0000000)
     {
         *(.rodata)
     }
-
-    .data BLOCK(4K) : ALIGN(4K)
+    .data ALIGN (4K) : AT (ADDR (.data) - 0xC0000000)
     {
         *(.data)
     }
-
-    .bss BLOCK(4K) : ALIGN(4K)
+    .bss ALIGN (4K) : AT (ADDR (.bss) - 0xC0000000)
     {
         *(COMMON)
         *(.bss)
+        *(.bootstrap_stack)
     }
-
-    kernel_physical_end = .;
-    kernel_virtual_end = .;
+    /* Add a symbol that indicates the end address of the kernel. */
+    kernel_end = .;
+    kernel_physical_end = . - 0xC0000000;
 }

@@ -29,7 +29,7 @@ debug: $(DISK) $(KERNEL_ELF)
 
 disk: $(DISK)
 
-$(DISK): $(KERNEL_ELF)
+$(DISK): $(KERNEL_ELF) grub.cfg
 	@mkdir -p $(dir $@)
 	@mkdir -p iso/boot/grub
 	cp $(KERNEL_ELF) iso/boot/$(NAME).elf
