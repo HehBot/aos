@@ -1,38 +1,36 @@
 ENTRY(_start)
 
-SECTIONS {
-    . = 0xC0000000;
+SECTIONS
+{
+    . = 1M;
 
-    screen_virtual_start = 0xC0009000;
-    screen_physical_start = 0xB8000;
-    page_dir_virtual_start = 0xC0008000;
-    page_dir_physical_start = 0x8000;
-
+    kernel_physical_start = .;
     kernel_virtual_start = .;
-    kernel_physical_start = . - 0xC0000000;
+    screen_physical_start = 0xB8000;
+    screen_virtual_start = 0xB8000;
 
-    /* align at 4 KB and load at 1 MB */
-    .text ALIGN (0x1000) : AT(ADDR(.text)-0xC0000000)
+    .text BLOCK(4K) : ALIGN(4K)
     {
+        *(.multiboot)
         *(.text)
     }
-    /* align at 4 KB and load at 1 MB + . */
-    .rodata ALIGN (0x1000) : AT(ADDR(.rodata)-0xC0000000)
+
+    .rodata BLOCK(4K) : ALIGN(4K)
     {
-        *(.rodata*)
+        *(.rodata)
     }
 
-    /* align at 4 KB and load at 1 MB + . */
-    .data ALIGN (0x1000) : AT(ADDR(.data)-0xC0000000)
+    .data BLOCK(4K) : ALIGN(4K)
     {
         *(.data)
     }
-    /* align at 4 KB and load at 1 MB + . */
-    .bss ALIGN (0x1000) : AT(ADDR(.bss)-0xC0000000)
+
+    .bss BLOCK(4K) : ALIGN(4K)
     {
         *(COMMON)
         *(.bss)
     }
+
+    kernel_physical_end = .;
     kernel_virtual_end = .;
-    kernel_physical_end = . - 0xC0000000;
 }
