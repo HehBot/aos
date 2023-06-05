@@ -4,7 +4,6 @@ SECTIONS
 {
     . = 1M;
 
-    screen_physical_start = 0xB8000;
     _kernel_start = .;
 
     .multiboot.data :
@@ -37,7 +36,6 @@ SECTIONS
     {
         *(COMMON)
         *(.bss)
-        *(.bootstrap_stack)
     }
     /* Add a symbol that indicates the end address of the kernel. */
     kernel_end = .;
