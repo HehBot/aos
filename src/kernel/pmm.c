@@ -1,6 +1,6 @@
 // Physical memory manager
 
-#include "kmalloc.h"
+#include "kwmalloc.h"
 #include "multiboot.h"
 
 #include <stdbool.h>
@@ -22,7 +22,7 @@ static section_t* sections;
 // tell physical memory manager about availabe regions of RAM
 static void pmm_add_physical(uintptr_t addr, uint32_t len)
 {
-    section_t* z = kmalloc(sizeof(*z));
+    section_t* z = kwmalloc(sizeof(*z));
     z->addr = (addr >> PAGE_ORDER) << PAGE_ORDER;
     if (z->addr < addr)
         z->addr += (1 << PAGE_ORDER);
@@ -30,7 +30,7 @@ static void pmm_add_physical(uintptr_t addr, uint32_t len)
     z->bitmap_size = (z->ul - z->addr) >> (PAGE_ORDER + 5);
     if (z->bitmap_size << (PAGE_ORDER + 5) != z->ul - z->addr)
         z->bitmap_size += 1;
-    z->bitmap = kmalloc(sizeof(z->bitmap[0]) * (z->bitmap_size));
+    z->bitmap = kwmalloc(sizeof(z->bitmap[0]) * (z->bitmap_size));
     if (sections == NULL)
         sections = z->next = z;
     else {

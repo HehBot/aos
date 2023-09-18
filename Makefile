@@ -5,7 +5,7 @@ LD := i386-elf-ld
 EMU := qemu-system-i386
 GDB := gdb
 
-NAME := myos
+NAME := aos
 SRC_DIR := src
 BUILD_DIR := build
 
@@ -19,6 +19,8 @@ CFLAGS := -Wall -Wextra -Werror -g -ffreestanding -nostdlib -MMD -MP -I$(SRC_DIR
 DISK := $(BUILD_DIR)/$(NAME).iso
 
 KERNEL_ELF := $(BUILD_DIR)/$(NAME).elf
+INITRD_IMG := $(BUILD_DIR)/initrd.img
+GEN_INITRD_IMG := scripts/geninitrd
 
 run: $(DISK)
 	$(EMU) -no-reboot -no-shutdown -drive file=$<,index=0,media=disk,format=raw
@@ -29,12 +31,20 @@ debug: $(DISK) $(KERNEL_ELF)
 
 disk: $(DISK)
 
-$(DISK): $(KERNEL_ELF) grub.cfg
+$(DISK): $(KERNEL_ELF) grub.cfg $(INITRD_IMG)
 	@mkdir -p $(dir $@)
 	@mkdir -p iso/boot/grub
 	cp $(KERNEL_ELF) iso/boot/$(NAME).elf
+	cp $(INITRD_IMG) iso/boot/initrd.img
 	cp grub.cfg iso/boot/grub/grub.cfg
 	grub-mkrescue -o $@ iso
+
+$(INITRD_IMG): $(GEN_INITRD_IMG)
+	$< initrd/hello.txt hello_initrd.txt
+	mv initrd.img $@
+
+$(GEN_INITRD_IMG): $(GEN_INITRD_IMG).c
+	gcc -o $@ $<
 
 $(KERNEL_ELF): $(OBJS) linker.ld
 	@mkdir -p $(dir $@)

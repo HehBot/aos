@@ -7,14 +7,19 @@
 
 static uint8_t* vid_mem;
 
-void init_screen(uint32_t addr)
+static size_t screen_rows;
+static size_t screen_cols;
+
+void init_screen(uintptr_t addr, size_t fbw, size_t fbh)
 {
     vid_mem = (uint8_t*)addr;
+    screen_rows = fbh;
+    screen_cols = fbw;
 }
 
 static size_t get_screen_offset(size_t cols, size_t rows)
 {
-    return cols + SCREEN_MAX_COLS * rows;
+    return cols + screen_cols * rows;
 }
 static size_t get_cursor()
 {
@@ -35,14 +40,14 @@ static void set_cursor(size_t offset)
 
 static size_t handle_scrolling(size_t offset)
 {
-    size_t shift = ((offset / SCREEN_MAX_COLS) + 1);
-    if (shift <= SCREEN_MAX_ROWS)
+    size_t shift = ((offset / screen_cols) + 1);
+    if (shift <= screen_rows)
         return offset;
-    shift -= SCREEN_MAX_ROWS;
-    shift *= SCREEN_MAX_COLS;
+    shift -= screen_rows;
+    shift *= screen_cols;
 
-    memmove(vid_mem, vid_mem + 2 * shift, 2 * (SCREEN_MAX_ROWS * SCREEN_MAX_COLS - shift));
-    for (size_t i = SCREEN_MAX_ROWS * SCREEN_MAX_COLS - 1 - shift; i < SCREEN_MAX_ROWS * SCREEN_MAX_COLS; ++i)
+    memmove(vid_mem, vid_mem + 2 * shift, 2 * (screen_rows * screen_cols - shift));
+    for (size_t i = screen_rows * screen_cols - 1 - shift; i < screen_rows * screen_cols; ++i)
         vid_mem[2 * i] = ' ';
     return offset - shift;
 }
@@ -59,14 +64,14 @@ void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_
 
     size_t offset;
 
-    if (col < SCREEN_MAX_COLS && row < SCREEN_MAX_ROWS)
+    if (col < screen_cols && row < screen_rows)
         offset = get_screen_offset(col, row);
     else
         offset = get_cursor();
 
     if (character == '\n') {
-        size_t rows = offset / SCREEN_MAX_COLS;
-        offset = get_screen_offset(SCREEN_MAX_COLS - 1, rows);
+        size_t rows = offset / screen_cols;
+        offset = get_screen_offset(screen_cols - 1, rows);
     } else {
         vid_mem[2 * offset] = character;
         vid_mem[2 * offset + 1] = (fg_color << 4) | bg_color;
@@ -79,8 +84,8 @@ void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_
 
 void clear_screen()
 {
-    for (size_t row = 0; row < SCREEN_MAX_ROWS; ++row)
-        for (size_t col = 0; col < SCREEN_MAX_COLS; ++col)
+    for (size_t row = 0; row < screen_rows; ++row)
+        for (size_t col = 0; col < screen_cols; ++col)
             print_char(' ', col, row, SCREEN_COLOR_BLACK, SCREEN_COLOR_WHITE);
     set_cursor(get_screen_offset(0, 0));
 }

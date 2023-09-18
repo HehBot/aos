@@ -31,3 +31,23 @@ void* memset(void* str, int c, size_t n)
         s[i] = C;
     return str;
 }
+
+char* strcpy(char* dest, char const* src)
+{
+    while ((*(dest++) = *(src++)))
+        ;
+    return dest;
+}
+size_t strlen(char const* s)
+{
+    size_t i = 0;
+    while (*(s++))
+        i++;
+    return i;
+}
+int strcmp(char const* s1, char const* s2)
+{
+    while (!(*s1) && !(*s2) && (*(s1++) == *(s2++)))
+        ;
+    return (*s1 - *s2);
+}

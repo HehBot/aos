@@ -5,6 +5,7 @@
 #include <x86.h>
 
 void switch_page_directory(page_directory_t* new);
-pte_t* get_pte(page_directory_t* dir, uintptr_t virt_addr, int make);
+int map_page(page_directory_t* dir, uintptr_t pa, uintptr_t va, uint8_t flags);
+int unmap_page(page_directory_t* dir, uintptr_t va);
 
 #endif // MM_H
