@@ -4,8 +4,6 @@ SECTIONS
 {
     . = 1M;
 
-    _kernel_start = .;
-
     .multiboot.data :
     {
         *(.multiboot.data)
@@ -15,10 +13,9 @@ SECTIONS
         *(.multiboot.text)
     }
 
-    kernel_physical_start = .;
+    _kernel_physical_start = .;
     . += 0xC0000000;
-    kernel_start = .;
-    screen_start = 0xC03FF000;
+    _kernel_start = .;
 
     .text ALIGN (4K) : AT (ADDR (.text) - 0xC0000000)
     {
@@ -38,6 +35,6 @@ SECTIONS
         *(.bss)
     }
     /* Add a symbol that indicates the end address of the kernel. */
-    kernel_end = .;
-    kernel_physical_end = . - 0xC0000000;
+    _kernel_end = .;
+    _kernel_physical_end = . - 0xC0000000;
 }

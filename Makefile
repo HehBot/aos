@@ -21,10 +21,10 @@ DISK := $(BUILD_DIR)/$(NAME).iso
 KERNEL_ELF := $(BUILD_DIR)/$(NAME).elf
 
 run: $(DISK)
-	$(EMU) -no-reboot -no-shutdown -cdrom $<
+	$(EMU) -no-reboot -no-shutdown -drive file=$<,index=0,media=disk,format=raw
 
 debug: $(DISK) $(KERNEL_ELF)
-	$(EMU) -s -S -no-reboot -no-shutdown -cdrom $< &
+	$(EMU) -s -S -no-reboot -no-shutdown -drive file=$<,index=0,media=disk,format=raw &
 	$(GDB) -ex "target remote tcp::1234" -ex "symbol-file $(KERNEL_ELF)"
 
 disk: $(DISK)

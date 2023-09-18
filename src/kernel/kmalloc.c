@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+#include <x86.h>
 
 #define BLOCK_ORDER 4
 
@@ -11,31 +12,33 @@ struct block_hdr {
 };
 typedef struct block_hdr block_hdr_t;
 
-#define MEMPOOL_SIZE 16384
-static uint8_t mempool[MEMPOOL_SIZE];
-static uintptr_t kheap_end = (uintptr_t)&mempool[MEMPOOL_SIZE];
-#undef MEMPOOL_SIZE
-static block_hdr_t* baseptr = (block_hdr_t*)mempool;
+static block_hdr_t* baseptr;
+static uintptr_t kheap_end;
 
-void mm_minit()
+void kmallocinit(void)
 {
+#define KHEAP_SIZE 0x60000
+    static __attribute__((__aligned__(PAGE_SIZE))) uint8_t kheap[KHEAP_SIZE];
+    kheap_end = (uintptr_t)(kheap + KHEAP_SIZE);
+#undef KHEAP_SIZE
+    baseptr = (void*)kheap;
     baseptr->size = 0;
     baseptr->prev = baseptr;
     baseptr->next = baseptr;
 }
-void* mm_malloc(size_t z)
+void* kmalloc(size_t sz)
 {
-    if (z & ((1 << BLOCK_ORDER) - 1))
-        z = (1 + (z >> BLOCK_ORDER)) << BLOCK_ORDER;
+    if (sz & ((1 << BLOCK_ORDER) - 1))
+        sz = (1 + (sz >> BLOCK_ORDER)) << BLOCK_ORDER;
 
     block_hdr_t* p = baseptr;
     for (; p->next != baseptr; p = p->next) {
-        if ((uintptr_t)(p->next) - (uintptr_t)p > z + sizeof(block_hdr_t))
+        if ((uintptr_t)(p->next) - (uintptr_t)p > sz + sizeof(block_hdr_t))
             break;
     }
-    if (p->next != baseptr || kheap_end - (uintptr_t)p > z + sizeof(block_hdr_t)) {
+    if (p->next != baseptr || kheap_end - (uintptr_t)p > sz + sizeof(block_hdr_t)) {
         block_hdr_t* new = (block_hdr_t*)((uintptr_t)(p + 1) + p->size);
-        new->size = z;
+        new->size = sz;
         new->next = p->next;
         new->prev = p;
         p->next->prev = new;
@@ -44,7 +47,7 @@ void* mm_malloc(size_t z)
     }
     return NULL;
 }
-void mm_free(void* ptr)
+void kfree(void* ptr)
 {
     block_hdr_t* p = ptr;
     p = p - 1;

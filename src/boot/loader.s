@@ -21,86 +21,31 @@ dd 0x0
 dd 0x0
 dd 0x0
 
-align 8
-temp_gdt:
-%include "gdt.s"
-TEMP_CODE_SEG equ temp_gdt.code_seg - temp_gdt.start
-TEMP_DATA_SEG equ temp_gdt.data_seg - temp_gdt.start
-
 [section .bss]
 alignb 16
 STACK_SIZE equ 0x4000
-stack_bottom:
+stack_b:
 resb STACK_SIZE
-stack_top:
-
-mboot:
-resb 120
-mboot_magic:
-resb 4
-
-alignb 4096
-page_dir:
-resb 4096
-temp_page_table:
-resb 4096
-
-[section .data]
-align 8
-gdt:
-%include "gdt.s"
-CODE_SEG equ gdt.code_seg - gdt.start
-DATA_SEG equ gdt.data_seg - gdt.start
+stack_t:
+KERN_BASE               equ     0xc0000000
 
 [section .multiboot.text]
 [global _start]
-[extern _kernel_start]
-[extern kernel_end]
+[extern entry_pgdir]
+[extern mboot_magic]
+[extern mboot_info]
 _start:
         cli
 
-        ; load GDT
-        lgdt    [temp_gdt.descriptor]
-        ; fix segments
-        mov     cx, TEMP_DATA_SEG
-        mov     ds, cx
-        mov     es, cx
-        mov     fs, cx
-        mov     gs, cx
-        jmp     TEMP_CODE_SEG:.fix_cs
-.fix_cs:
-
         ; store mboot header
-        mov     dword [mboot_magic-0xc0000000], eax
-        mov     edi, mboot-0xc0000000
+        mov     dword [mboot_magic-KERN_BASE], eax
+        mov     edi, mboot_info-KERN_BASE
         mov     esi, ebx
         mov     ecx, 0x78
         rep     movsb
 
         ; enable paging
-        mov     edi, temp_page_table-0xc0000000
-        mov     esi, 0
-        mov     ecx, 1023
-.1:
-;         cmp     esi, _kernel_start
-        cmp     esi, 0
-        jl      .2
-        cmp     esi, kernel_end - 0xc0000000
-        jge     .3
-
-        mov     edx, esi
-        or      edx, 0x003
-        mov     dword [edi], edx
-.2:
-        add     esi, 4096
-        add     edi, 4
-        loop    .1
-.3:
-        mov     dword [page_dir-0xc0000000+0], temp_page_table-0xc0000000+0x003
-        mov     dword [page_dir-0xc0000000+768*4], temp_page_table-0xc0000000+0x003
-
-        ; set up paging
-        mov     eax, page_dir-0xc0000000
+        mov     eax, entry_pgdir-KERN_BASE
         mov     cr3, eax
         mov     ebx, cr4
         or      ebx, 0x00000010
@@ -109,50 +54,53 @@ _start:
         or      ebx, 0x80010000
         mov     cr0, ebx
 
-        jmp     fix_eip
+        jmp     start
 
 [section .text]
-fix_eip:
-        ; reload GDT
-        lgdt    [gdt.descriptor]
+[extern entry_gdt_desc]
+CODE_SEG equ 0x8
+DATA_SEG equ 0x10
+start:
+        ; load GDT
+        lgdt    [entry_gdt_desc]
         ; fix segments
+        jmp     CODE_SEG:start.fix_cs
+.fix_cs:
         mov     ax, DATA_SEG
         mov     ds, ax
         mov     es, ax
         mov     fs, ax
         mov     gs, ax
-        jmp     CODE_SEG:.fix_cs
-.fix_cs:
-        mov     ebp, stack_top
+        ; set up stack
+        mov     ebp, stack_t
         mov     ss, ax
         mov     esp, ebp
 
-        mov     dword [page_dir+0], 0x00000000
-        mov     eax, cr3
-        mov     cr3, eax
+        ; remove identity map entry
+        mov     dword [entry_pgdir+0], 0x00000000
 
         ; install interrupt handlers and enable interrupts
         [extern isr_install]
         call    isr_install
         sti
 
-        [extern main]
-        [extern kernel_physical_end]
-        [extern kernel_physical_start]
-        [extern kernel_end]
+        [extern _kernel_start]
+        [extern _kernel_end]
+        [extern _kernel_physical_start]
+        [extern _kernel_physical_end]
         [extern kernel_start]
-times 1 push    0x00000000
-        push    kernel_physical_end
-        push    kernel_physical_start
-        push    kernel_end
-        push    kernel_start
-        push    STACK_SIZE
-        push    stack_bottom
-        push    gdt.descriptor
-        push    temp_page_table
-        push    page_dir
-        push    dword [mboot_magic]
-        push    mboot
+        [extern kernel_end]
+        [extern kernel_physical_start]
+        [extern kernel_physical_end]
+        [extern stack_bottom]
+        [extern stack_size]
+        mov     dword [kernel_start], _kernel_start
+        mov     dword [kernel_end], _kernel_end
+        mov     dword [kernel_physical_start], _kernel_physical_start
+        mov     dword [kernel_physical_end], _kernel_physical_end
+        mov     dword [stack_bottom], stack_b
+        mov     dword [stack_size], STACK_SIZE
+
+        [extern main]
         call    main
         jmp     $
-.end:

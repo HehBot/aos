@@ -197,10 +197,12 @@
 
 static void keyboard_callback(cpu_state_t*)
 {
-    //     uint8_t sc = port_read_byte(PORT_KEYBOARD_DATA);
-    port_read_byte(PORT_KEYBOARD_DATA);
+    uint8_t sc = port_read_byte(PORT_KEYBOARD_DATA);
     //     printf("scancode: 0x%hhx, %c\n", sc, letter(sc));
-    printf("Page at 0x%x\n", pmm_get_page());
+    if (sc == 0x26)
+        printf("Large frame at 0x%x\n", pmm_get_large_frame());
+    else if (sc == 0x1e)
+        printf("Frame at 0x%x\n", pmm_get_frame());
 }
 
 void init_keyboard()

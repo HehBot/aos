@@ -2,10 +2,9 @@
 #define MM_H
 
 #include <stdint.h>
+#include <x86.h>
 
-void mm_init(uint32_t* pgd, uint32_t* temp_pgt);
-void mm_add_physical(uintptr_t phyaddr, uint32_t len);
-void mm_reserve_physical_page(uintptr_t phyaddr);
-void mm_reserve_page(uintptr_t vaddr);
+void switch_page_directory(page_directory_t* new);
+pte_t* get_pte(page_directory_t* dir, uintptr_t virt_addr, int make);
 
 #endif // MM_H
