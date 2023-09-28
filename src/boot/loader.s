@@ -1,8 +1,8 @@
 MULTIBOOT_PAGE_ALIGN    equ     1 << 0
 MULTIBOOT_MEMORY_INFO   equ     1 << 1
-MULTIBOOT_USE_GFX       equ     1 << 2
+MULTIBOOT_VIDEO_MODE    equ     1 << 2
 MULTIBOOT_HEADER_MAGIC  equ     0x1BADB002
-MULTIBOOT_HEADER_FLAGS  equ     MULTIBOOT_PAGE_ALIGN | MULTIBOOT_MEMORY_INFO | MULTIBOOT_USE_GFX
+MULTIBOOT_HEADER_FLAGS  equ     MULTIBOOT_PAGE_ALIGN | MULTIBOOT_MEMORY_INFO | MULTIBOOT_VIDEO_MODE
 MULTIBOOT_CHECKSUM      equ     -(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS)
 
 [section .multiboot.data]
@@ -16,17 +16,20 @@ dd 0x0  ; load_end_addr
 dd 0x0  ; bss_end_addr
 dd 0x0  ; entry_addr
 ; GFX requests
-dd 0x1
-dd 0x0
-dd 0x0
-dd 0x0
+dd 0x1  ; mode_type
+dd 0x0  ; width
+dd 0x0  ; height
+dd 0x0  ; depth (bpp)
 
 [section .bss]
 alignb 16
-STACK_SIZE equ 0x4000
-stack_b:
+STACK_SIZE equ 0x1000
+canary:
+resb 16
+stack_top:
 resb STACK_SIZE
-stack_t:
+stack:
+
 KERN_BASE               equ     0xc0000000
 
 [section .multiboot.text]
@@ -72,7 +75,7 @@ start:
         mov     fs, ax
         mov     gs, ax
         ; set up stack
-        mov     ebp, stack_t
+        mov     ebp, stack
         mov     ss, ax
         mov     esp, ebp
 
@@ -83,23 +86,6 @@ start:
         [extern isr_install]
         call    isr_install
         sti
-
-        [extern _kernel_start]
-        [extern _kernel_end]
-        [extern _kernel_physical_start]
-        [extern _kernel_physical_end]
-        [extern kernel_start]
-        [extern kernel_end]
-        [extern kernel_physical_start]
-        [extern kernel_physical_end]
-        [extern stack_bottom]
-        [extern stack_size]
-        mov     dword [kernel_start], _kernel_start
-        mov     dword [kernel_end], _kernel_end
-        mov     dword [kernel_physical_start], _kernel_physical_start
-        mov     dword [kernel_physical_end], _kernel_physical_end
-        mov     dword [stack_bottom], stack_b
-        mov     dword [stack_size], STACK_SIZE
 
         [extern main]
         call    main

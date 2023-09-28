@@ -1,25 +1,29 @@
 #include <drivers/screen.h>
 
-#define PRINTF_STATE_NORMAL 0
-#define PRINTF_STATE_LENGTH 1
-#define PRINTF_STATE_SPECIFIER 2
+typedef enum printf_state {
+    PRINTF_STATE_NORMAL,
+    PRINTF_STATE_LENGTH,
+    PRINTF_STATE_SPECIFIER,
+} printf_state_t;
 
-#define PRINTF_LENGTH_SHORT_SHORT 0
-#define PRINTF_LENGTH_SHORT 1
-#define PRINTF_LENGTH_DEFAULT 2
-#define PRINTF_LENGTH_LONG 3
+typedef enum printf_length {
+    PRINTF_LENGTH_SHORT_SHORT,
+    PRINTF_LENGTH_SHORT,
+    PRINTF_LENGTH_DEFAULT,
+    PRINTF_LENGTH_LONG,
+} printf_length_t;
 
 static void putint(int* arg, int length, unsigned int base);
 static void putuint(int* arg, int length, unsigned int base);
 
-static char const l[] = "0123456789abcdef";
+static char const l[] = "0123456789ABCDEF";
 static char buf[11];
 
 void __attribute__((cdecl)) printf(char const* fmt, ...)
 {
     int* argp = (int*)(&fmt);
-    int state = PRINTF_STATE_NORMAL;
-    int length = PRINTF_LENGTH_DEFAULT;
+    printf_state_t state = PRINTF_STATE_NORMAL;
+    printf_length_t length = PRINTF_LENGTH_DEFAULT;
 
     argp++;
     while (*fmt) {
@@ -84,7 +88,6 @@ void __attribute__((cdecl)) printf(char const* fmt, ...)
             state = PRINTF_STATE_NORMAL;
             length = PRINTF_LENGTH_DEFAULT;
             break;
-        default:
         }
         fmt++;
     }
@@ -138,7 +141,6 @@ static void putint(int* arg, int length, unsigned int base)
             z /= base;
         } while (z > 0);
     } break;
-    default:
     }
     while (i > 0)
         putc(buf[--i]);
@@ -175,7 +177,6 @@ static void putuint(int* arg, int length, unsigned int base)
             z /= base;
         } while (z > 0);
     } break;
-    default:
     }
     while (i > 0)
         putc(buf[--i]);

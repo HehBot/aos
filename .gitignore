@@ -1,3 +1,6 @@
 [Bb][Uu][Ii][Ll][Dd]/
 
 iso/
+**.img
+initrd/geninitrd
+user/files/

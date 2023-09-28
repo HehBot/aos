@@ -7,3 +7,4 @@ BreakConstructorInitializers: BeforeColon
 AlignOperands: AlignAfterOperator
 AlignAfterOpenBracket: Align
 IndentPPDirectives: BeforeHash
+IncludeIsMainRegex: "$a"

@@ -2,9 +2,18 @@
 
 #include <stdint.h>
 
+#define PORT_PIC1 0x20
+#define PORT_PIC1_CTRL (PORT_PIC1)
+#define PORT_PIC1_DATA (PORT_PIC1 + 1)
+
+#define PORT_PIC2 0xa0
+#define PORT_PIC2_CTRL (PORT_PIC2)
+#define PORT_PIC2_DATA (PORT_PIC2 + 1)
+
+#define PIC_EOI 0x20
+
 void PIC_send_EOI(uint8_t irq)
 {
-#define PIC_EOI 0x20
     if (irq >= 8)
         port_write_byte(PORT_PIC2_CTRL, PIC_EOI);
     port_write_byte(PORT_PIC1_CTRL, PIC_EOI);
@@ -39,7 +48,7 @@ void PIC_remap(uint8_t offset1, uint8_t offset2)
 
     // ICW2
     port_write_byte(PORT_PIC1_DATA, offset1);
-    port_write_byte(PORT_PIC1_DATA, offset2);
+    port_write_byte(PORT_PIC2_DATA, offset2);
 
     // ICW3
     port_write_byte(PORT_PIC1_DATA, 4); // telling PIC1 that IRQ2 has a slave PIC (hence 0b00000100)

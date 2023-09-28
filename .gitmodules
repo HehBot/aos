@@ -1,0 +1,3 @@
+[submodule "src/util/liballoc"]
+	path = src/util/liballoc
+	url = git@github.com:blanham/liballoc.git

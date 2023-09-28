@@ -1,9 +1,10 @@
-#include "../kernel/pmm.h"
-
 #include <cpu/interrupt.h>
 #include <cpu/port.h>
+#include <kernel/pmm.h>
 #include <stdbool.h>
 #include <stdio.h>
+
+#define PORT_KEYBOARD_DATA 0x60
 
 // static bool lshift_pressed = false;
 // static bool rshift_pressed = false;
@@ -205,7 +206,7 @@ static void keyboard_callback(cpu_state_t*)
         printf("Frame at 0x%x\n", pmm_get_frame());
 }
 
-void init_keyboard()
+void init_keyboard(void)
 {
-    register_isr_handler(IRQ1, keyboard_callback);
+    register_isr_handler(IRQ1, &keyboard_callback);
 }

@@ -1,57 +1,27 @@
+#include "kpalloc.h"
 #include "kwmalloc.h"
 #include "mm.h"
-#include "multiboot.h"
 #include "pmm.h"
-#include "string.h"
 
+#include <cpu/interrupt.h>
+#include <cpu/x86.h>
+#include <drivers/ata.h>
 #include <drivers/keyboard.h>
 #include <drivers/screen.h>
 #include <fs/fs.h>
 #include <fs/initrd.h>
-#include <stdbool.h>
+#include <liballoc.h>
+#include <multiboot.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <x86.h>
-
-extern gdt_desc_t entry_gdt_desc;
-extern pde_t entry_pgdir[];
-
-static page_directory_t kernel_page_dir __attribute__((__aligned__(PAGE_SIZE)));
 
 multiboot_info_t mboot_info;
 uint32_t mboot_magic;
 
-uintptr_t kernel_start, kernel_end, kernel_physical_start, kernel_physical_end;
-uintptr_t stack_bottom, stack_size;
-
-void init_kernel_pgdir(void)
-{
-    memset(&kernel_page_dir, 0, sizeof(kernel_page_dir));
-    kernel_page_dir.physical_addr = ((uintptr_t)&kernel_page_dir.tables_physical - KERN_BASE);
-
-    // 1. set up meta page table in current pgdir and kernel pgdir
-    uintptr_t pgtb_phy = pmm_get_frame();
-    entry_pgdir[0x3ff] = LPG_ROUND_DOWN(pgtb_phy) | PTE_LP | PTE_W | PTE_P;
-    page_table_t* pgtb = (void*)(0xffc00000 + (pgtb_phy - LPG_ROUND_DOWN(pgtb_phy)));
-    memset(pgtb->pages, 0, sizeof(pgtb->pages));
-    pgtb->pages[0] = pgtb_phy | PTE_W | PTE_P;
-    entry_pgdir[0x3ff] = pgtb_phy | PTE_W | PTE_P;
-    pgtb = (void*)0xffc00000;
-
-    kernel_page_dir.tables[0x3ff] = pgtb;
-    kernel_page_dir.tables_physical[0x3ff] = pgtb_phy | PTE_W | PTE_P;
-
-    // 2. map kernel
-    // Phy p <=> Virt (p + KERN_BASE)
-    for (uintptr_t virt = kernel_start; virt < kernel_end; virt += PAGE_SIZE)
-        map_page(&kernel_page_dir, virt - KERN_BASE, virt, PTE_W);
-
-    // 3. switch to kernel pgdir
-    switch_page_directory(&kernel_page_dir);
-    unmap_page(&kernel_page_dir, (uintptr_t)entry_pgdir);
-}
+extern mem_map_t kernel_mem_map[];
+static mem_map_t* mod_mem_map;
 
 void main(void)
 {
@@ -60,65 +30,70 @@ void main(void)
         || !(mboot_info.flags & MULTIBOOT_INFO_FRAMEBUFFER_INFO))
         return;
 
-    // 1. initialise kernel water allocator
-    kwmallocinit();
+    // 0. read module mappings
+    multiboot_module_t* mods = (multiboot_module_t*)(mboot_info.mods_addr + KERN_BASE);
+    mod_mem_map = kwmalloc((mboot_info.mods_count + 1) * (sizeof mod_mem_map[0]));
+    for (size_t i = 0; i < mboot_info.mods_count; ++i) {
+        mem_map_t m = { 1, 0, PTE_W, 0, { { mods[i].mod_start, mods[i].mod_end } } };
+        mod_mem_map[i] = m;
+    }
 
-    uintptr_t initrd_phy_addr = *(uintptr_t*)(mboot_info.mods_addr + KERN_BASE);
-    uintptr_t initrd_phy_end = *(uintptr_t*)(mboot_info.mods_addr + KERN_BASE + 4);
+    // 1. initialise pmm
+    init_pmm(&mboot_info);
+    for (size_t i = 0; kernel_mem_map[i].present; ++i)
+        if (kernel_mem_map[i].mapped)
+            for (uintptr_t phy = kernel_mem_map[i].phy_start; phy < kernel_mem_map[i].phy_end; phy += PAGE_SIZE)
+                pmm_reserve_frame(phy);
+    for (size_t i = 0; mod_mem_map[i].present; ++i)
+        for (uintptr_t phy = mod_mem_map[i].phy_start; phy < mod_mem_map[i].phy_end; phy += PAGE_SIZE)
+            pmm_reserve_frame(phy);
 
-    // 2. initialise pmm
-    pmm_init(mboot_info);
-    for (uintptr_t phys = kernel_physical_start; phys < kernel_physical_end; phys += PAGE_SIZE)
-        pmm_reserve_frame(phys);
+    // 2. initialise mm
+    init_mm();
 
-    for (uintptr_t pa = initrd_phy_addr; pa < initrd_phy_end; pa += PAGE_SIZE)
-        pmm_reserve_frame(pa);
+    // 3. set up kernel heap
+    init_kpalloc();
 
-    // 3. set up kernel pgdir and tables
-    init_kernel_pgdir();
+    // 4. initialise screen
+    init_screen(&mboot_info);
 
-    uintptr_t initrd_addr = 0x1000;
-    for (uintptr_t pa = initrd_phy_addr, va = initrd_addr; pa < initrd_phy_end; pa += PAGE_SIZE, va += PAGE_SIZE)
-        map_page(&kernel_page_dir, pa, va, PTE_W);
-
-    // 4. initialise kernel allocator
-    //     kmallocinit();
-
-    // 5. initialise screen
-    uintptr_t fb_addr = 0xc03ff000;
-    map_page(&kernel_page_dir, mboot_info.framebuffer_addr_low, fb_addr, PTE_W);
-    init_screen(fb_addr, mboot_info.framebuffer_width, mboot_info.framebuffer_height);
-
-    printf("\
-Kernel      0x%x - 0x%x (Phy0x%x - Phy0x%x)\n\
-    GDT         Desc=0x%x, Size=%d, Loc=0x%x\n\
-    Stack       0x%x - 0x%x\n\
-",
-           kernel_start, kernel_end, kernel_physical_start, kernel_physical_end,
-           (uintptr_t)&entry_gdt_desc, entry_gdt_desc.size, (uintptr_t)entry_gdt_desc.gdt,
-           stack_bottom, stack_bottom + stack_size);
-
-    fs_root = initialise_initrd(initrd_addr);
-
-    printf("\nContents of initrd:\n");
-
+    // 5. read initrd
+    for (uintptr_t virt = 0x1000, phy = mod_mem_map[0].phy_start; phy < mod_mem_map[0].phy_end; virt += PAGE_SIZE, phy += PAGE_SIZE)
+        map_page(phy, virt, PTE_W);
+    fs_root = initialise_initrd(0x1000);
+    printf("Contents of initrd:\n");
     struct dirent* node = NULL;
     for (size_t i = 0; (node = read_dir_fs(fs_root, i)) != NULL; ++i) {
-        printf("Found file ");
-        printf("%s", node->name);
+        printf("Found file \"%s\"\n", node->name);
         fs_node_t* fsnode = find_dir_fs(fs_root, node->name);
 
         if (FS_TYPE(fsnode->flags) == FS_DIR)
-            printf("\n    (directory)\n");
+            printf("    (directory)\n");
         else {
-            printf("\n     contents:\n\n");
-            char buf[1024];
-            size_t sz = read_fs(fsnode, 0, 1024, buf);
+            printf("     contents:\n");
+            char buf[256];
+            size_t sz = read_fs(fsnode, 0, 256, buf);
             for (size_t j = 0; j < sz; ++j)
                 printf("%c", buf[j]);
-            printf("\nSize= %dB\n", sz);
+            printf("\n     total %d bytes\n\n", sz);
         }
     }
+
+    // 6. read fs
+    ata_init();
+    void* buf = kmalloc(512);
+    volatile int flag;
+    ata_req(1, 0, buf, &flag);
+    while (!flag)
+        ;
+    int (*user_func)(void) = buf;
+    printf("Loaded function returned 0x%x\n", user_func());
+    kfree(buf);
+
+    test_kpalloc();
+    void* z = kmalloc(20);
+    printf("0x%x\n", z);
+    kfree(z);
 
     init_keyboard();
 }

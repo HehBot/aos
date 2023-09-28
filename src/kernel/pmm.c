@@ -3,10 +3,9 @@
 #include "kwmalloc.h"
 #include "multiboot.h"
 
-#include <stdbool.h>
+#include <cpu/x86.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <x86.h>
 
 struct section {
     uintptr_t addr, ul;
@@ -38,10 +37,10 @@ static void pmm_add_physical(uintptr_t addr, uint32_t len)
         sections->next = z;
     }
 }
-void pmm_init(multiboot_info_t mboot_info)
+void init_pmm(multiboot_info_t const* mboot_info)
 {
-    for (size_t i = 0; i < mboot_info.mmap_length; i += sizeof(multiboot_memory_map_t)) {
-        multiboot_memory_map_t* mmmt = (multiboot_memory_map_t*)(mboot_info.mmap_addr + KERN_BASE + i);
+    for (size_t i = 0; i < mboot_info->mmap_length; i += sizeof(multiboot_memory_map_t)) {
+        multiboot_memory_map_t* mmmt = (multiboot_memory_map_t*)(mboot_info->mmap_addr + KERN_BASE + i);
         if (mmmt->type == MULTIBOOT_MEMORY_AVAILABLE)
             pmm_add_physical(mmmt->addr_low, mmmt->len_low);
     }
@@ -51,7 +50,7 @@ void pmm_init(multiboot_info_t mboot_info)
 #define LPG_IW INDEX(LPAGE_SIZE)
 
 // set frame containing this physical address to occupied
-bool pmm_reserve_frame(uintptr_t addr)
+int pmm_reserve_frame(uintptr_t addr)
 {
     section_t* p = sections;
     do {
@@ -59,16 +58,16 @@ bool pmm_reserve_frame(uintptr_t addr)
             size_t a = (addr - p->addr) >> PAGE_ORDER;
             uint32_t h = ((p->bitmap[a >> 5]) >> (a % 32)) & 1;
             if (h)
-                return false;
+                return 0;
             p->bitmap[a >> 5] |= (1 << (a % 32));
-            return true;
+            return 1;
         }
         p = p->next;
     } while (p != sections);
-    return false;
+    return 0;
 }
 // set large frame containing this physical address to occupied
-bool pmm_reserve_large_frame(uintptr_t addr)
+int pmm_reserve_large_frame(uintptr_t addr)
 {
     addr = LPG_ROUND_DOWN(addr);
     section_t* p = sections;
@@ -78,14 +77,14 @@ bool pmm_reserve_large_frame(uintptr_t addr)
             size_t start_index = INDEX(addr - p->addr);
             for (size_t i = start_index; i < start_index + LPG_IW; ++i)
                 if (bm[i])
-                    return false;
+                    return 0;
             for (size_t i = start_index; i < start_index + LPG_IW; ++i)
                 bm[i] = 0xffffffff;
-            return true;
+            return 1;
         }
         p = p->next;
     } while (p != sections);
-    return false;
+    return 0;
 }
 // get frame
 uintptr_t pmm_get_frame()
@@ -112,7 +111,7 @@ uintptr_t pmm_get_frame()
         }
         p = p->next;
     } while (p != sections);
-    //     PANIC("Out of frames");
+    PANIC();
     return 0;
 }
 // get large frame
@@ -137,10 +136,10 @@ uintptr_t pmm_get_large_frame()
         }
         p = p->next;
     } while (p != sections);
-    //     PANIC("Out of frames");
+    PANIC();
     return 0;
 }
-bool pmm_free_frame(uintptr_t addr)
+int pmm_free_frame(uintptr_t addr)
 {
     section_t* p = sections;
     do {
@@ -149,17 +148,17 @@ bool pmm_free_frame(uintptr_t addr)
             size_t a = (addr - p->addr) >> PAGE_ORDER;
             uint32_t h = ((bm[a >> 5]) >> (a % 32)) & 1;
             if (!h)
-                return false;
+                return 0;
             bm[a >> 5] ^= (1 << (a % 32));
             // optimisation to prevent having to search from start next time
             //             sections = p;
-            return true;
+            return 1;
         }
         p = p->next;
     } while (p != sections);
-    return false;
+    return 0;
 }
-bool pmm_free_large_frame(uintptr_t addr)
+int pmm_free_large_frame(uintptr_t addr)
 {
     addr = LPG_ROUND_DOWN(addr);
     section_t* p = sections;
@@ -167,18 +166,18 @@ bool pmm_free_large_frame(uintptr_t addr)
         uint32_t* bm = p->bitmap;
         if (p->addr <= addr && p->ul > addr) {
             if (p->ul < addr + LPAGE_SIZE)
-                return false;
+                return 0;
             size_t base = INDEX(addr - p->addr);
             for (size_t i = base; i < base + LPG_IW; ++i)
                 if (!bm[i])
-                    return false;
+                    return 0;
             for (size_t i = base; i < base + LPG_IW; ++i)
                 bm[i] = 0;
             // optimisation to prevent having to search from start next time
             //             sections = p;
-            return true;
+            return 1;
         }
         p = p->next;
     } while (p != sections);
-    return false;
+    return 0;
 }

@@ -1,17 +1,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-static uint8_t* base;
-static uintptr_t top;
+#define WHEAP_SIZE 0x10000
+static uint8_t wheap[WHEAP_SIZE];
 
-void kwmallocinit(void)
-{
-#define KWHEAP_SIZE 0x10000
-    static uint8_t kwheap[KWHEAP_SIZE];
-    base = kwheap;
-    top = (uintptr_t)(kwheap + KWHEAP_SIZE);
-#undef KWHEAP_SIZE
-}
+static uint8_t* base = (void*)wheap;
+static uintptr_t top = (uintptr_t)&wheap[WHEAP_SIZE];
 
 void* kwmalloc(size_t sz)
 {

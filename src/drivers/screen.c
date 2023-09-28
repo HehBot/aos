@@ -1,20 +1,32 @@
 #include "screen.h"
 
 #include <cpu/port.h>
+#include <cpu/x86.h>
+#include <kernel/kpalloc.h>
+#include <kernel/mm.h>
+#include <multiboot.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
+
+#define PORT_SCREEN_CTRL 0x3d4
+#define PORT_SCREEN_DATA 0x3d5
 
 static uint8_t* vid_mem;
 
 static size_t screen_rows;
 static size_t screen_cols;
 
-void init_screen(uintptr_t addr, size_t fbw, size_t fbh)
+void init_screen(multiboot_info_t const* mboot_info)
 {
-    vid_mem = (uint8_t*)addr;
-    screen_rows = fbh;
-    screen_cols = fbw;
+    size_t pgs = PG_ROUND_UP(mboot_info->framebuffer_width * (mboot_info->framebuffer_height + 1) * (mboot_info->framebuffer_bpp >> 3)) / PAGE_SIZE;
+
+    vid_mem = kpalloc(pgs);
+    for (size_t i = 0; i < pgs; ++i)
+        remap_page(mboot_info->framebuffer_addr_low + i * PAGE_SIZE, (uintptr_t)vid_mem + i * PAGE_SIZE, PTE_W);
+
+    screen_rows = mboot_info->framebuffer_height;
+    screen_cols = mboot_info->framebuffer_width;
 }
 
 static size_t get_screen_offset(size_t cols, size_t rows)
@@ -23,11 +35,11 @@ static size_t get_screen_offset(size_t cols, size_t rows)
 }
 static size_t get_cursor()
 {
-    port_write_byte(0x3d4, 14);
-    size_t offset = port_read_byte(0x3d5);
+    port_write_byte(PORT_SCREEN_CTRL, 14);
+    size_t offset = port_read_byte(PORT_SCREEN_DATA);
     offset <<= 8;
-    port_write_byte(0x3d4, 15);
-    offset |= port_read_byte(0x3d5);
+    port_write_byte(PORT_SCREEN_CTRL, 15);
+    offset |= port_read_byte(PORT_SCREEN_DATA);
     return offset;
 }
 static void set_cursor(size_t offset)
@@ -47,7 +59,7 @@ static size_t handle_scrolling(size_t offset)
     shift *= screen_cols;
 
     memmove(vid_mem, vid_mem + 2 * shift, 2 * (screen_rows * screen_cols - shift));
-    for (size_t i = screen_rows * screen_cols - 1 - shift; i < screen_rows * screen_cols; ++i)
+    for (size_t i = screen_rows * screen_cols - shift; i < screen_rows * screen_cols; ++i)
         vid_mem[2 * i] = ' ';
     return offset - shift;
 }

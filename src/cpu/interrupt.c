@@ -1,7 +1,7 @@
 #include "interrupt.h"
-
 #include "pic.h"
 
+#include <cpu/x86.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -37,9 +37,7 @@ static void set_idt()
 {
     idt_reg.base = (uint32_t)&idt;
     idt_reg.limit = IDT_ENTRIES * sizeof(idt_entry_t) - 1;
-    asm("lidt [%0]"
-        :
-        : "r"(&idt_reg));
+    lidt((uintptr_t)&idt_reg);
 }
 
 #define D_excep(z) void isr_##z##_excep(cpu_state_t)
@@ -158,7 +156,7 @@ void isr_excep_common(cpu_state_t* cpu_state)
 {
     char const* exception_messages[] = {
         "Division By Zero",
-        "Debug",
+        "Debug Panic",
         "Non Maskable Interrupt",
         "Breakpoint",
         "Into Detected Overflow",
@@ -205,6 +203,8 @@ edi = 0x%x  esi = 0x%x  edx = 0x%x  ebx = 0x%x  ecx = 0x%x  eax = 0x%x\n\
            cpu_state->cs, cpu_state->ds, cpu_state->ss,
            cpu_state->eip, cpu_state->eflags, cpu_state->useresp, cpu_state->ebp,
            cpu_state->edi, cpu_state->esi, cpu_state->edx, cpu_state->ebx, cpu_state->ecx, cpu_state->eax);
+    if (cpu_state->int_no == 14)
+        printf("Page fault at address 0x%x\n", rcr2());
 
     asm("cli\r\nhlt");
 }

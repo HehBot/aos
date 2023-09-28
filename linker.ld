@@ -13,28 +13,32 @@ SECTIONS
         *(.multiboot.text)
     }
 
-    _kernel_physical_start = .;
     . += 0xC0000000;
-    _kernel_start = .;
 
     .text ALIGN (4K) : AT (ADDR (.text) - 0xC0000000)
     {
+        kernel_code_start = .;
+        kernel_phy_code_start = . - 0xC0000000;
         *(.text)
     }
-    .rodata ALIGN (4K) : AT (ADDR (.rodata) - 0xC0000000)
+    .rodata : AT (ADDR (.rodata) - 0xC0000000)
     {
         *(.rodata)
+        kernel_phy_code_end = . - 0xC0000000;
     }
+
     .data ALIGN (4K) : AT (ADDR (.data) - 0xC0000000)
     {
+        kernel_data_start = .;
+        kernel_phy_data_start = . - 0xC0000000;
         *(.data)
     }
-    .bss ALIGN (4K) : AT (ADDR (.bss) - 0xC0000000)
+    .bss : AT (ADDR (.bss) - 0xC0000000)
     {
         *(COMMON)
         *(.bss)
+        kernel_phy_data_end = . - 0xC0000000;
     }
-    /* Add a symbol that indicates the end address of the kernel. */
-    _kernel_end = .;
-    _kernel_physical_end = . - 0xC0000000;
+    . = ALIGN(4K);
+    kernel_heap_start = .;
 }

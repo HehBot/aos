@@ -7,31 +7,33 @@ GDB := gdb
 
 NAME := aos
 SRC_DIR := src
+INITRD_DIR := initrd
+FS_DIR := user
 BUILD_DIR := build
 
 SRCS := $(shell find $(SRC_DIR) -name "*.c" -or -name "*.s")
 DEPS := $(SRCS:%=$(BUILD_DIR)/%.d)
 OBJS := $(SRCS:%=$(BUILD_DIR)/%.o)
 
-ASMFLAGS := -g
-CFLAGS := -Wall -Wextra -Werror -g -ffreestanding -nostdlib -MMD -MP -I$(SRC_DIR)/ -I$(SRC_DIR)/util -masm=intel
-
-DISK := $(BUILD_DIR)/$(NAME).iso
-
 KERNEL_ELF := $(BUILD_DIR)/$(NAME).elf
-INITRD_IMG := $(BUILD_DIR)/initrd.img
-GEN_INITRD_IMG := scripts/geninitrd
+DISK := $(BUILD_DIR)/$(NAME).iso
+INITRD_IMG := $(INITRD_DIR)/initrd.img
+FS_IMG := $(FS_DIR)/fs.img
 
-run: $(DISK)
-	$(EMU) -no-reboot -no-shutdown -drive file=$<,index=0,media=disk,format=raw
+ASMFLAGS := -g
+CFLAGS := -Wall -Wextra -Werror -g -ffreestanding -nostdlib -MMD -MP -I$(SRC_DIR)/ -I$(SRC_DIR)/util -I$(SRC_DIR)/util/liballoc -masm=intel
+EMU_FLAGS := -no-reboot -no-shutdown -drive file=$(DISK),index=0,media=disk,format=raw -drive file=$(FS_IMG),index=1,media=disk,format=raw
 
-debug: $(DISK) $(KERNEL_ELF)
-	$(EMU) -s -S -no-reboot -no-shutdown -drive file=$<,index=0,media=disk,format=raw &
+run: $(DISK) $(FS_IMG)
+	$(EMU) $(EMU_FLAGS)
+
+debug: $(DISK) $(KERNEL_ELF) $(FS_IMG)
+	$(EMU) -s -S $(EMU_FLAGS) &
 	$(GDB) -ex "target remote tcp::1234" -ex "symbol-file $(KERNEL_ELF)"
 
 disk: $(DISK)
 
-$(DISK): $(KERNEL_ELF) grub.cfg $(INITRD_IMG)
+$(DISK): $(KERNEL_ELF) $(INITRD_IMG) grub.cfg
 	@mkdir -p $(dir $@)
 	@mkdir -p iso/boot/grub
 	cp $(KERNEL_ELF) iso/boot/$(NAME).elf
@@ -39,12 +41,11 @@ $(DISK): $(KERNEL_ELF) grub.cfg $(INITRD_IMG)
 	cp grub.cfg iso/boot/grub/grub.cfg
 	grub-mkrescue -o $@ iso
 
-$(INITRD_IMG): $(GEN_INITRD_IMG)
-	$< initrd/hello.txt hello_initrd.txt
-	mv initrd.img $@
+$(INITRD_IMG):
+	$(MAKE) -C $(INITRD_DIR)
 
-$(GEN_INITRD_IMG): $(GEN_INITRD_IMG).c
-	gcc -o $@ $<
+$(FS_IMG):
+	$(MAKE) -C $(FS_DIR)
 
 $(KERNEL_ELF): $(OBJS) linker.ld
 	@mkdir -p $(dir $@)
@@ -61,7 +62,9 @@ $(BUILD_DIR)/%.s.o: %.s
 #####################################
 
 clean:
-	rm -rf $(BUILD_DIR) iso
+	$(RM) -r $(BUILD_DIR) iso
+	$(MAKE) -C $(INITRD_DIR) clean
+	$(MAKE) -C $(FS_DIR) clean
 
 .PHONY: run debug disk clean
 
