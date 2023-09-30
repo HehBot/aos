@@ -1,17 +1,17 @@
-#include "kpalloc.h"
-#include "kwmalloc.h"
-#include "mm.h"
-#include "pmm.h"
-
 #include <cpu/interrupt.h>
 #include <cpu/x86.h>
 #include <drivers/ata.h>
 #include <drivers/keyboard.h>
 #include <drivers/screen.h>
+#include <drivers/timer.h>
 #include <fs/fs.h>
 #include <fs/initrd.h>
 #include <liballoc.h>
+#include <mem/kwmalloc.h>
+#include <mem/mm.h>
+#include <mem/pmm.h>
 #include <multiboot.h>
+#include <proc/proc.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -48,52 +48,35 @@ void main(void)
         for (uintptr_t phy = mod_mem_map[i].phy_start; phy < mod_mem_map[i].phy_end; phy += PAGE_SIZE)
             pmm_reserve_frame(phy);
 
-    // 2. initialise mm
+    // 2. initialise mm and kernel heap
     init_mm();
-
-    // 3. set up kernel heap
-    init_kpalloc();
 
     // 4. initialise screen
     init_screen(&mboot_info);
 
-    // 5. read initrd
-    for (uintptr_t virt = 0x1000, phy = mod_mem_map[0].phy_start; phy < mod_mem_map[0].phy_end; virt += PAGE_SIZE, phy += PAGE_SIZE)
-        map_page(phy, virt, PTE_W);
-    fs_root = initialise_initrd(0x1000);
-    printf("Contents of initrd:\n");
-    struct dirent* node = NULL;
-    for (size_t i = 0; (node = read_dir_fs(fs_root, i)) != NULL; ++i) {
-        printf("Found file \"%s\"\n", node->name);
-        fs_node_t* fsnode = find_dir_fs(fs_root, node->name);
+    // 5. initialise tss
+    init_tss();
 
-        if (FS_TYPE(fsnode->flags) == FS_DIR)
-            printf("    (directory)\n");
-        else {
-            printf("     contents:\n");
-            char buf[256];
-            size_t sz = read_fs(fsnode, 0, 256, buf);
-            for (size_t j = 0; j < sz; ++j)
-                printf("%c", buf[j]);
-            printf("\n     total %d bytes\n\n", sz);
-        }
-    }
-
-    // 6. read fs
+    // 6. initialise ata
     ata_init();
-    void* buf = kmalloc(512);
-    volatile int flag;
-    ata_req(1, 0, buf, &flag);
+
+    // 6. set up user addr space
+    size_t d = alloc_page_directory();
+    switch_page_directory(d);
+
+    void* user_code = 0x0;
+    map_page(pmm_get_frame(), (uintptr_t)user_code, PTE_W | PTE_U);
+    volatile int flag = 0;
+    ata_req(1, 0, user_code, &flag);
     while (!flag)
         ;
-    int (*user_func)(void) = buf;
-    printf("Loaded function returned 0x%x\n", user_func());
-    kfree(buf);
 
-    test_kpalloc();
-    void* z = kmalloc(20);
-    printf("0x%x\n", z);
-    kfree(z);
+    void* user_stack = (void*)(KERN_BASE - 16);
+    map_page(pmm_get_frame(), (uintptr_t)user_stack, PTE_W | PTE_U);
 
-    init_keyboard();
+    void* kstack = kmalloc(0x500);
+
+    set_tss(kstack);
+    cpu_state_t c = { 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, USER_DATA_SEG, USER_DATA_SEG, USER_DATA_SEG, USER_DATA_SEG, 0x0, 0x0, (uintptr_t)user_code, USER_CODE_SEG, 0x0, (uintptr_t)user_stack, USER_DATA_SEG };
+    enter_usermode(&c);
 }

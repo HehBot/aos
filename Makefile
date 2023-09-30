@@ -1,4 +1,4 @@
-ASM := nasm
+ASM := i386-elf-as
 CC := i386-elf-gcc
 LD := i386-elf-ld
 
@@ -11,7 +11,7 @@ INITRD_DIR := initrd
 FS_DIR := user
 BUILD_DIR := build
 
-SRCS := $(shell find $(SRC_DIR) -name "*.c" -or -name "*.s")
+SRCS := $(shell find $(SRC_DIR) -name "*.c" -or -name "*.S")
 DEPS := $(SRCS:%=$(BUILD_DIR)/%.d)
 OBJS := $(SRCS:%=$(BUILD_DIR)/%.o)
 
@@ -20,8 +20,12 @@ DISK := $(BUILD_DIR)/$(NAME).iso
 INITRD_IMG := $(INITRD_DIR)/initrd.img
 FS_IMG := $(FS_DIR)/fs.img
 
-ASMFLAGS := -g
-CFLAGS := -Wall -Wextra -Werror -g -ffreestanding -nostdlib -MMD -MP -I$(SRC_DIR)/ -I$(SRC_DIR)/util -I$(SRC_DIR)/util/liballoc -masm=intel
+INC_FLAGS = -I$(SRC_DIR)/ -I$(SRC_DIR)/util -I$(SRC_DIR)/util/liballoc
+
+ASMFLAGS := -c -g
+CFLAGS := -c -g -Wall -Wextra -Werror -ffreestanding -nostdlib -MMD -MP $(INC_FLAGS)
+LDFLAGS := -T linker.ld
+
 EMU_FLAGS := -no-reboot -no-shutdown -drive file=$(DISK),index=0,media=disk,format=raw -drive file=$(FS_IMG),index=1,media=disk,format=raw
 
 run: $(DISK) $(FS_IMG)
@@ -41,23 +45,25 @@ $(DISK): $(KERNEL_ELF) $(INITRD_IMG) grub.cfg
 	cp grub.cfg iso/boot/grub/grub.cfg
 	grub-mkrescue -o $@ iso
 
-$(INITRD_IMG):
-	$(MAKE) -C $(INITRD_DIR)
+$(INITRD_IMG): .FORCE
+	@$(MAKE) -C $(INITRD_DIR)
 
-$(FS_IMG):
-	$(MAKE) -C $(FS_DIR)
+$(FS_IMG): .FORCE
+	@$(MAKE) -C $(FS_DIR)
 
 $(KERNEL_ELF): $(OBJS) linker.ld
 	@mkdir -p $(dir $@)
-	$(LD) -T linker.ld -o $@ $(OBJS)
+	$(LD) $(LDFLAGS) -o $@ $(OBJS)
 
 $(BUILD_DIR)/%.c.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) -c $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $<
 
-$(BUILD_DIR)/%.s.o: %.s
+$(BUILD_DIR)/%.S.o: %.S
 	@mkdir -p $(dir $@)
-	$(ASM) $(ASMFLAGS) -I$(dir $<) -f elf32 -MD $(BUILD_DIR)/$<.d -o $@ $<
+	@i386-elf-cpp -MMD -MP $(INC_FLAGS) -o $(BUILD_DIR)/$<.S $<
+	$(ASM) $(ASMFLAGS) -o $@ $(BUILD_DIR)/$<.S
+	@$(RM) $(BUILD_DIR)/$<.S
 
 #####################################
 
@@ -66,6 +72,7 @@ clean:
 	$(MAKE) -C $(INITRD_DIR) clean
 	$(MAKE) -C $(FS_DIR) clean
 
+.FORCE:
 .PHONY: run debug disk clean
 
 -include $(DEPS)

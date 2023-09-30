@@ -13,7 +13,7 @@
 
 void init_timer(uint32_t freq, isr_t timer_callback)
 {
-    register_isr_handler(IRQ0, timer_callback);
+    register_irq_handler(T_IRQ0, timer_callback);
     if (freq < PIT_MIN_FREQ)
         freq = PIT_MIN_FREQ;
     uint32_t div = PIT_BASE_FREQ / freq;

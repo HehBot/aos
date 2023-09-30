@@ -73,7 +73,7 @@ void ata_req(int drive, int sector, void* b, volatile int* f)
 
 void ata_init(void)
 {
-    register_isr_handler(IRQ14, &ata_callback);
+    register_irq_handler(T_IRQ14, &ata_callback);
 
     ata_wait(0);
     port_write_byte(PORT_ATA_DRIVE_HEAD, 0xe0 | (1 << 4));

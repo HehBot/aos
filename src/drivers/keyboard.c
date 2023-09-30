@@ -1,6 +1,6 @@
 #include <cpu/interrupt.h>
 #include <cpu/port.h>
-#include <kernel/pmm.h>
+#include <mem/pmm.h>
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -208,5 +208,5 @@ static void keyboard_callback(cpu_state_t*)
 
 void init_keyboard(void)
 {
-    register_isr_handler(IRQ1, &keyboard_callback);
+    register_irq_handler(T_IRQ1, &keyboard_callback);
 }

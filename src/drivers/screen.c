@@ -2,8 +2,8 @@
 
 #include <cpu/port.h>
 #include <cpu/x86.h>
-#include <kernel/kpalloc.h>
-#include <kernel/mm.h>
+#include <mem/kpalloc.h>
+#include <mem/mm.h>
 #include <multiboot.h>
 #include <stddef.h>
 #include <stdint.h>

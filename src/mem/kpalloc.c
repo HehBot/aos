@@ -1,8 +1,8 @@
-#include "kpalloc.h"
 #include "kwmalloc.h"
 #include "mm.h"
 #include "pmm.h"
 
+#include <cpu/x86.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -54,7 +54,7 @@ void init_kpalloc(void)
 
     extern void* kernel_heap_start;
     free_list->addr = (uintptr_t)&kernel_heap_start;
-    free_list->sz = 1;
+    free_list->sz = INIT_HEAP_SZ;
 
     end = free_list->addr + PAGE_SIZE;
     occ_list = NULL;
