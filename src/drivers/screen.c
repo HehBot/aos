@@ -27,13 +27,14 @@ void init_screen(multiboot_info_t const* mboot_info)
 
     screen_rows = mboot_info->framebuffer_height;
     screen_cols = mboot_info->framebuffer_width;
+    clear_screen();
 }
 
-static size_t get_screen_offset(size_t cols, size_t rows)
+static inline size_t get_screen_offset(size_t cols, size_t rows)
 {
     return cols + screen_cols * rows;
 }
-static size_t get_cursor()
+static inline size_t get_cursor()
 {
     port_write_byte(PORT_SCREEN_CTRL, 14);
     size_t offset = port_read_byte(PORT_SCREEN_DATA);
@@ -42,7 +43,7 @@ static size_t get_cursor()
     offset |= port_read_byte(PORT_SCREEN_DATA);
     return offset;
 }
-static void set_cursor(size_t offset)
+static inline void set_cursor(size_t offset)
 {
     port_write_byte(PORT_SCREEN_CTRL, 14);
     port_write_byte(PORT_SCREEN_DATA, (offset >> 8) & 0xff);
@@ -50,7 +51,7 @@ static void set_cursor(size_t offset)
     port_write_byte(PORT_SCREEN_DATA, offset & 0xff);
 }
 
-static size_t handle_scrolling(size_t offset)
+static inline size_t handle_scrolling(size_t offset)
 {
     size_t shift = ((offset / screen_cols) + 1);
     if (shift <= screen_rows)

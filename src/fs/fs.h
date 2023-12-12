@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+extern size_t block_size;
+
 #define FS_TYPE(x) ((x)&0x07)
 #define FS_FILE 0x01
 #define FS_DIR 0x02
@@ -22,7 +24,7 @@ typedef void (*close_file_t)(struct fs_node*);
 
 struct dirent {
     char name[128];
-    uint32_t ino;
+    uint32_t inode;
 };
 typedef struct dirent* (*read_dir_t)(struct fs_node*, size_t);
 typedef struct fs_node* (*find_dir_t)(struct fs_node*, char const* name);
@@ -49,9 +51,9 @@ typedef struct fs_node {
             read_dir_t read_dir;
             find_dir_t find_dir;
         };
+        struct fs_node* symlink_to;
+        struct fs_node* mounted_root;
     };
-
-    struct fs_node* ptr;
 } fs_node_t;
 
 extern fs_node_t* fs_root;

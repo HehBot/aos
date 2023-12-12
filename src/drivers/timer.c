@@ -1,7 +1,7 @@
 #include <cpu/interrupt.h>
 #include <cpu/port.h>
+#include <cpu/x86.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #define PORT_PIT_CTRL 0x43
 #define PORT_PIT_CHANNEL0_DATA 0x40

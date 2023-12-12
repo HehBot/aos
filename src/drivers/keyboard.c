@@ -1,7 +1,8 @@
 #include <cpu/interrupt.h>
 #include <cpu/port.h>
+#include <cpu/x86.h>
 #include <mem/pmm.h>
-#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #define PORT_KEYBOARD_DATA 0x60

@@ -1,8 +1,7 @@
-#include "kpalloc.h"
-#include "pmm.h"
-
 #include <cpu/x86.h>
 #include <liballoc.h>
+#include <mem/kpalloc.h>
+#include <mem/pmm.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>

@@ -1,8 +1,7 @@
 // initrd.c -- Defines the interface for and structures relating to the initial ramdisk.
 // Written for JamesM's kernel development tutorials.
 
-#include "initrd.h"
-
+#include <fs/initrd.h>
 #include <liballoc.h>
 #include <string.h>
 
@@ -31,13 +30,13 @@ static struct dirent* initrd_read_dir(fs_node_t* node, size_t index)
     if (node == initrd_root && index == 0) {
         strcpy(dirent.name, "dev");
         dirent.name[3] = 0; // Make sure the string is NULL-terminated.
-        dirent.ino = 0;
+        dirent.inode = 0;
         return &dirent;
     }
     if (index - 1 >= nroot_nodes)
         return NULL;
     strcpy(dirent.name, (char const*)root_nodes[index - 1].name);
-    dirent.ino = root_nodes[index - 1].inode;
+    dirent.inode = root_nodes[index - 1].inode;
     return &dirent;
 }
 
@@ -53,7 +52,7 @@ static fs_node_t* initrd_find_dir(fs_node_t* node, char const* name)
     return NULL;
 }
 
-fs_node_t* initialise_initrd(uintptr_t location)
+fs_node_t* read_initrd(uintptr_t location)
 {
     // Initialise the main and file header pointers and populate the root directory.
     initrd_header = (initrd_header_t*)location;
@@ -66,7 +65,6 @@ fs_node_t* initialise_initrd(uintptr_t location)
     initrd_root->flags = FS_DIR;
     initrd_root->read_dir = &initrd_read_dir;
     initrd_root->find_dir = &initrd_find_dir;
-    initrd_root->ptr = NULL;
     initrd_root->impl = 0;
 
     // Initialise the /dev directory (required!)
@@ -76,7 +74,6 @@ fs_node_t* initialise_initrd(uintptr_t location)
     initrd_dev->flags = FS_DIR;
     initrd_dev->read_dir = &initrd_read_dir;
     initrd_dev->find_dir = &initrd_find_dir;
-    initrd_dev->ptr = NULL;
     initrd_dev->impl = 0;
 
     root_nodes = (fs_node_t*)kmalloc(sizeof(fs_node_t) * initrd_header->nfiles);
@@ -92,7 +89,6 @@ fs_node_t* initialise_initrd(uintptr_t location)
         strcpy((char*)root_nodes[i].name, (char const*)file_headers[i].name);
         root_nodes[i].mask = root_nodes[i].uid = root_nodes[i].gid = 0;
         root_nodes[i].length = file_headers[i].length;
-        root_nodes[i].inode = i;
         root_nodes[i].flags = FS_FILE;
         root_nodes[i].read = &initrd_read;
         root_nodes[i].write = NULL;

@@ -1,0 +1,53 @@
+#! /usr/bin/bash
+
+if ! [ $# -eq 3 ] && ! [ $# -eq 4 ]; then
+    echo "Usage: ${0} <fs-root> <partition-file> <image-file> [--bootable]"
+    echo "       ${0} <fs-root> --ready <image-file> [--bootable]"
+    exit 1
+fi
+
+READY=0
+BOOT=0
+if [ $# -eq 4 ]; then
+    if [ ${4} == "--bootable" ]; then
+        BOOT=1
+    else
+        echo "Bad '--bootable' flag"
+        echo "Usage: ${0} <fs-root> <partition-file> <image-file> [--bootable]"
+        echo "       ${0} <fs-root> --ready <image-file> [--bootable]"
+        exit 1
+    fi
+fi
+if [ ${2} = "--ready" ]; then
+    READY=1
+    if [ ${BOOT} -eq 0 ]; then
+        echo "Nothing to do!"
+        exit 1
+    fi
+fi
+
+if [ ${READY} -eq 0 ]; then
+    rm -rf ${3}
+    dd if=/dev/zero of=${3} bs=1048576 count=128
+    sfdisk ${3} < ${2}
+fi
+sudo losetup /dev/loop0 ${3}
+sudo losetup /dev/loop1 ${3} -o 1048576
+if [ ${READY} -eq 0 ]; then
+    sudo mkfs.ext2 /dev/loop1
+fi
+MOUNT_POINT=$(mktemp -d)
+sudo mount /dev/loop1 ${MOUNT_POINT}
+if [ ${READY} -eq 0 ]; then
+    sudo cp -r ${1}/* ${MOUNT_POINT}
+    sync
+fi
+if [ ${BOOT} -eq 1 ]; then
+    sudo grub-install --target=i386-pc --boot-directory=${MOUNT_POINT}/boot --modules="normal part_msdos ext2 multiboot" --no-floppy /dev/loop0
+    sync
+fi
+tree ${MOUNT_POINT}
+sudo umount ${MOUNT_POINT}
+sudo losetup -d /dev/loop0
+sudo losetup -d /dev/loop1
+rmdir ${MOUNT_POINT}

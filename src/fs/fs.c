@@ -1,7 +1,5 @@
-#include "fs.h"
-
+#include <fs/fs.h>
 #include <stddef.h>
-#include <stdint.h>
 
 fs_node_t* fs_root = NULL;
 

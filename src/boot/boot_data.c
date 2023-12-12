@@ -1,5 +1,4 @@
 #include <cpu/x86.h>
-#include <stddef.h>
 #include <stdint.h>
 
 __attribute__((__aligned__(PAGE_SIZE))) uint32_t entry_pgdir[1024]

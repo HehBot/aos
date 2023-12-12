@@ -1,4 +1,3 @@
-#include "interrupt.h"
 #include "pic.h"
 
 #include <cpu/x86.h>

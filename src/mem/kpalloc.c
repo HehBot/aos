@@ -56,7 +56,7 @@ void init_kpalloc(void)
     free_list->addr = (uintptr_t)&kernel_heap_start;
     free_list->sz = INIT_HEAP_SZ;
 
-    end = free_list->addr + PAGE_SIZE;
+    end = free_list->addr + INIT_HEAP_SZ * PAGE_SIZE;
     occ_list = NULL;
 }
 

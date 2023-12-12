@@ -42,6 +42,7 @@ typedef struct {
     uint16_t ss;
     uint16_t : 16;
 } __attribute__((packed)) cpu_state_t;
+typedef void (*isr_t)(cpu_state_t*);
 
 static inline void lidt(uintptr_t idt_reg_addr)
 {

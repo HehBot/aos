@@ -1,9 +1,9 @@
 // Physical memory manager
 
 #include "kwmalloc.h"
-#include "multiboot.h"
 
 #include <cpu/x86.h>
+#include <multiboot.h>
 #include <stddef.h>
 #include <stdint.h>
 

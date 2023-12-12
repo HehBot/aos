@@ -15,10 +15,15 @@ SRCS := $(shell find $(SRC_DIR) -name "*.c" -or -name "*.S")
 DEPS := $(SRCS:%=$(BUILD_DIR)/%.d)
 OBJS := $(SRCS:%=$(BUILD_DIR)/%.o)
 
-KERNEL_ELF := $(BUILD_DIR)/$(NAME).elf
-DISK := $(BUILD_DIR)/$(NAME).iso
-INITRD_IMG := $(INITRD_DIR)/initrd.img
-FS_IMG := $(FS_DIR)/fs.img
+ROOT := $(BUILD_DIR)/root
+ROOTLOCK := $(ROOT).lock
+KERNEL := $(BUILD_DIR)/$(NAME)
+INITRD := $(INITRD_DIR)/initrd.img
+
+DISK := $(BUILD_DIR)/disk.img
+
+BOOTDISK := $(BUILD_DIR)/bootdisk.img
+BOOTCDROM := $(BUILD_DIR)/bootcdrom.iso
 
 INC_FLAGS = -I$(SRC_DIR)/ -I$(SRC_DIR)/util -I$(SRC_DIR)/util/liballoc
 
@@ -26,32 +31,48 @@ ASMFLAGS := -c -g
 CFLAGS := -c -g -Wall -Wextra -Werror -ffreestanding -nostdlib -MMD -MP $(INC_FLAGS)
 LDFLAGS := -T linker.ld
 
-EMU_FLAGS := -no-reboot -no-shutdown -drive file=$(DISK),index=0,media=disk,format=raw -drive file=$(FS_IMG),index=1,media=disk,format=raw
+EMU_FLAGS := -no-reboot -no-shutdown
 
-run: $(DISK) $(FS_IMG)
-	$(EMU) $(EMU_FLAGS)
+run_cdrom: $(BOOTCDROM) $(DISK)
+	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw -drive file=$(DISK),index=1,media=disk,format=raw
 
-debug: $(DISK) $(KERNEL_ELF) $(FS_IMG)
-	$(EMU) -s -S $(EMU_FLAGS) &
-	$(GDB) -ex "target remote tcp::1234" -ex "symbol-file $(KERNEL_ELF)"
+run_disk: $(BOOTDISK)
+	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTDISK),index=0,media=disk,format=raw
+
+debug: $(BOOTCDROM) $(KERNEL) $(DISK)
+	$(EMU) -s -S $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw -drive file=$(DISK),index=1,media=disk,format=raw &
+	$(GDB) -ex "target remote tcp::1234" -ex "symbol-file $(KERNEL)"
 
 disk: $(DISK)
+bootcdrom: $(BOOTCDROM)
+bootdisk: $(BOOTDISK)
 
-$(DISK): $(KERNEL_ELF) $(INITRD_IMG) grub.cfg
+$(DISK): $(ROOTLOCK) grub.cfg
 	@mkdir -p $(dir $@)
-	@mkdir -p iso/boot/grub
-	cp $(KERNEL_ELF) iso/boot/$(NAME).elf
-	cp $(INITRD_IMG) iso/boot/initrd.img
-	cp grub.cfg iso/boot/grub/grub.cfg
-	grub-mkrescue -o $@ iso
+	scripts/mkdisk $(ROOT) scripts/partitionfile $@
 
-$(INITRD_IMG): .FORCE
+$(BOOTCDROM): $(ROOTLOCK)
+	@mkdir -p $(dir $@)
+	scripts/mkcdrom $(ROOT)/boot $@
+
+$(BOOTDISK): $(ROOTLOCK)
+	@mkdir -p $(dir $@)
+	scripts/mkdisk $(ROOT) scripts/partitionfile $@ --bootable
+
+$(ROOTLOCK): $(KERNEL) $(INITRD) grub.cfg
+	@mkdir -p $(ROOT)/boot/grub
+	@cp $(KERNEL) $(ROOT)/boot/$(NAME)
+	@cp $(INITRD) $(ROOT)/boot/initrd.img
+	@cp grub.cfg $(ROOT)/boot/grub/grub.cfg
+	@touch $@
+
+$(INITRD): .FORCE
 	@$(MAKE) -C $(INITRD_DIR)
 
 $(FS_IMG): .FORCE
 	@$(MAKE) -C $(FS_DIR)
 
-$(KERNEL_ELF): $(OBJS) linker.ld
+$(KERNEL): $(OBJS) linker.ld
 	@mkdir -p $(dir $@)
 	$(LD) $(LDFLAGS) -o $@ $(OBJS)
 
@@ -68,11 +89,11 @@ $(BUILD_DIR)/%.S.o: %.S
 #####################################
 
 clean:
-	$(RM) -r $(BUILD_DIR) iso
+	$(RM) -r $(BUILD_DIR)
 	$(MAKE) -C $(INITRD_DIR) clean
 	$(MAKE) -C $(FS_DIR) clean
 
 .FORCE:
-.PHONY: run debug disk clean
+.PHONY: run_cdrom run_disk debug disk bootdisk bootcdrom clean
 
 -include $(DEPS)

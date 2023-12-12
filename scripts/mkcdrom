@@ -1,0 +1,12 @@
+#! /usr/bin/bash
+
+if ! [ $# -eq 2 ]; then
+    echo "Usage: ${0} <boot-folder> <iso-file>"
+    exit 1
+fi
+
+TMPDIR=$(mktemp -d)
+mkdir -p ${TMPDIR}/boot
+cp -r ${1}/* ${TMPDIR}/boot
+grub-mkrescue -o ${2} ${TMPDIR}
+rm -rf ${TMPDIR}

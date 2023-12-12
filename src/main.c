@@ -1,12 +1,16 @@
-#include <cpu/interrupt.h>
+#include "ext2.h"
+
 #include <cpu/x86.h>
-#include <drivers/ata.h>
+#include <drivers/disk/ata.h>
+#include <drivers/disk/block.h>
 #include <drivers/keyboard.h>
 #include <drivers/screen.h>
 #include <drivers/timer.h>
 #include <fs/fs.h>
 #include <fs/initrd.h>
+#include <hash_table.h>
 #include <liballoc.h>
+#include <mem/kpalloc.h>
 #include <mem/kwmalloc.h>
 #include <mem/mm.h>
 #include <mem/pmm.h>
@@ -21,7 +25,33 @@ multiboot_info_t mboot_info;
 uint32_t mboot_magic;
 
 extern mem_map_t kernel_mem_map[];
-static mem_map_t* mod_mem_map;
+
+size_t block_size;
+
+fs_node_t* root;
+
+static mem_map_t* read_module_map(multiboot_module_t* mods, size_t count)
+{
+    mem_map_t* map = kwmalloc((count + 1) * (sizeof map[0]));
+    for (size_t i = 0; i < count; ++i) {
+        mem_map_t m = { 1, 0, 0, 0, { { mods[i].mod_start, mods[i].mod_end } } };
+        map[i] = m;
+    }
+    map[mboot_info.mods_count].present = 0;
+    return map;
+}
+static void map_modules(mem_map_t* map)
+{
+    for (size_t i = 0; map[i].present; ++i) {
+        uintptr_t pa = map[i].phy_start;
+        size_t nr_pages = PG_ROUND_UP(map[i].phy_end - pa) / PAGE_SIZE;
+        uintptr_t va = (uintptr_t)kpalloc(nr_pages);
+        map[i].virt = va;
+        map[i].nr_pages = nr_pages;
+        for (size_t i = 0; i < nr_pages; ++i, pa += PAGE_SIZE, va += PAGE_SIZE)
+            remap_page(pa, va, PTE_W);
+    }
+}
 
 void main(void)
 {
@@ -31,12 +61,7 @@ void main(void)
         return;
 
     // 0. read module mappings
-    multiboot_module_t* mods = (multiboot_module_t*)(mboot_info.mods_addr + KERN_BASE);
-    mod_mem_map = kwmalloc((mboot_info.mods_count + 1) * (sizeof mod_mem_map[0]));
-    for (size_t i = 0; i < mboot_info.mods_count; ++i) {
-        mem_map_t m = { 1, 0, PTE_W, 0, { { mods[i].mod_start, mods[i].mod_end } } };
-        mod_mem_map[i] = m;
-    }
+    mem_map_t* mod_mem_map = read_module_map((multiboot_module_t*)(mboot_info.mods_addr + KERN_BASE), mboot_info.mods_count);
 
     // 1. initialise pmm
     init_pmm(&mboot_info);
@@ -48,35 +73,73 @@ void main(void)
         for (uintptr_t phy = mod_mem_map[i].phy_start; phy < mod_mem_map[i].phy_end; phy += PAGE_SIZE)
             pmm_reserve_frame(phy);
 
-    // 2. initialise mm and kernel heap
+    // 2. initialise mm, kernel heap, map modules
     init_mm();
+    map_modules(mod_mem_map);
 
-    // 4. initialise screen
+    // 3. initialise screen
     init_screen(&mboot_info);
 
-    // 5. initialise tss
-    init_tss();
+    // 4. initialise ata and disk cache
+    size_t fsdisk = ata_init();
 
-    // 6. initialise ata
-    ata_init();
+    // 5. mount initrd to '/'
+    root = read_initrd(mod_mem_map[0].virt);
 
-    // 6. set up user addr space
-    size_t d = alloc_page_directory();
-    switch_page_directory(d);
+    // 6. muck around with ext2
+    block_size = 1024; // superblock is of length 1024 at offset 1024 bytes
 
-    void* user_code = 0x0;
-    map_page(pmm_get_frame(), (uintptr_t)user_code, PTE_W | PTE_U);
-    volatile int flag = 0;
-    ata_req(1, 0, user_code, &flag);
-    while (!flag)
-        ;
+    block_t* b = alloc_block();
+    b->dev = fsdisk;
+    b->block = 1;
+    ata_sync(b);
+    superblock_t* sup = (void*)b->data;
+    b->data = NULL;
+    free_block(b);
+    block_size = (1 << (sup->log_block_sz + 10));
+    size_t inode_size = sup->inode_sz;
 
-    void* user_stack = (void*)(KERN_BASE - 16);
-    map_page(pmm_get_frame(), (uintptr_t)user_stack, PTE_W | PTE_U);
+    size_t nr_block_grp = (sup->nr_inodes + sup->inodes_per_block_grp - 1) / sup->inodes_per_block_grp;
+    if (nr_block_grp != (sup->nr_blocks + sup->blocks_per_block_grp - 1) / sup->blocks_per_block_grp) {
+        printf("Block group count mismatch\n");
+        return;
+    }
 
-    void* kstack = kmalloc(0x500);
+    b = alloc_block();
+    b->dev = fsdisk;
+    b->block = (block_size > 1024 ? 1 : 2);
+    ata_sync(b);
+    block_group_desc_t* block_grp_desc_table = (void*)b->data;
+    b->data = NULL;
+    free_block(b);
 
-    set_tss(kstack);
-    cpu_state_t c = { 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, USER_DATA_SEG, USER_DATA_SEG, USER_DATA_SEG, USER_DATA_SEG, 0x0, 0x0, (uintptr_t)user_code, USER_CODE_SEG, 0x0, (uintptr_t)user_stack, USER_DATA_SEG };
-    enter_usermode(&c);
+    dir_ent_t d = { 0 };
+    printf("%d\n", d.inode);
+
+    size_t root_dir_inode = 2;
+    {
+        size_t block_grp = (root_dir_inode - 1) / sup->inodes_per_block_grp;
+        size_t index = (root_dir_inode - 1) % sup->inodes_per_block_grp;
+        size_t inode_table_block = block_grp_desc_table[block_grp].inode_table_block;
+
+        size_t containing_block = inode_table_block + (index * inode_size / block_size);
+        size_t off = ((index * inode_size) % block_size) / inode_size;
+
+        b = alloc_block();
+        b->dev = fsdisk;
+        b->block = containing_block;
+        ata_sync(b);
+        inode_t root_inode = *(inode_t*)((uintptr_t)b->data + off * inode_size);
+        free_block(b);
+
+        b = alloc_block();
+        b->dev = fsdisk;
+        b->block = root_inode.dbp[0];
+        ata_sync(b);
+    }
+
+    printf("ext2 sign: '0x%x'\n", sup->ext2_sign);
+
+    // 7. initialise proc
+    init_proc();
 }
