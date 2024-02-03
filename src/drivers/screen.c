@@ -4,7 +4,7 @@
 #include <cpu/x86.h>
 #include <mem/kpalloc.h>
 #include <mem/mm.h>
-#include <multiboot.h>
+#include <multiboot2.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -17,16 +17,18 @@ static uint8_t* vid_mem;
 static size_t screen_rows;
 static size_t screen_cols;
 
-void init_screen(multiboot_info_t const* mboot_info)
+void init_screen(struct multiboot_tag_framebuffer const* fbinfo)
 {
-    size_t pgs = PG_ROUND_UP(mboot_info->framebuffer_width * (mboot_info->framebuffer_height + 1) * (mboot_info->framebuffer_bpp >> 3)) / PAGE_SIZE;
+    struct multiboot_tag_framebuffer_common const* common = &fbinfo->common;
+
+    size_t pgs = PG_ROUND_UP(common->framebuffer_width * (common->framebuffer_height + 1) * (common->framebuffer_bpp >> 3)) / PAGE_SIZE;
 
     vid_mem = kpalloc(pgs);
     for (size_t i = 0; i < pgs; ++i)
-        remap_page(mboot_info->framebuffer_addr_low + i * PAGE_SIZE, (uintptr_t)vid_mem + i * PAGE_SIZE, PTE_W);
+        remap_page(common->framebuffer_addr_low + i * PAGE_SIZE, (uintptr_t)vid_mem + i * PAGE_SIZE, PTE_W);
 
-    screen_rows = mboot_info->framebuffer_height;
-    screen_cols = mboot_info->framebuffer_width;
+    screen_rows = common->framebuffer_height;
+    screen_cols = common->framebuffer_width;
     clear_screen();
 }
 

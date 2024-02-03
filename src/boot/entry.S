@@ -1,24 +1,42 @@
 #include <cpu/x86.h>
-#include <multiboot.h>
-
-#define MULTIBOOT_HEADER_FLAGS (MULTIBOOT_PAGE_ALIGN | MULTIBOOT_MEMORY_INFO | MULTIBOOT_VIDEO_MODE)
-#define MULTIBOOT_CHECKSUM (-(MULTIBOOT_HEADER_MAGIC + MULTIBOOT_HEADER_FLAGS))
+#define ASM_FILE
+#include <multiboot2.h>
 
 .section .multiboot.data, "ax"
-.align MULTIBOOT_HEADER_ALIGN
-.long MULTIBOOT_HEADER_MAGIC
-.long MULTIBOOT_HEADER_FLAGS
-.long MULTIBOOT_CHECKSUM
-.long 0x0       // header_addr
-.long 0x0       // load_addr
-.long 0x0       // load_end_addr
-.long 0x0       // bss_end_addr
-.long 0x0       // entry_addr
-// GFX requests
-.long 0x1       // mode_type
-.long 0x0       // width
-.long 0x0       // height
-.long 0x0       // depth (bpp)
+.extern load_addr
+.extern load_end_addr
+.extern bss_end_addr
+.align 16
+multiboot_header:
+.long MULTIBOOT2_HEADER_MAGIC
+.long MULTIBOOT_ARCHITECTURE_I386
+.long (multiboot_header_end - multiboot_header)
+.long (-(MULTIBOOT2_HEADER_MAGIC + MULTIBOOT_ARCHITECTURE_I386 + (multiboot_header_end - multiboot_header)))
+
+.align 8
+address_tag_start:
+.short MULTIBOOT_HEADER_TAG_ADDRESS
+.short MULTIBOOT_HEADER_TAG_OPTIONAL
+.long address_tag_end-address_tag_start
+.long multiboot_header
+.long load_addr
+.long load_end_addr
+.long bss_end_addr
+address_tag_end:
+
+.align 8
+entry_address_tag_start:
+.short MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS
+.short MULTIBOOT_HEADER_TAG_OPTIONAL
+.long entry_address_tag_end-entry_address_tag_start
+.long _start
+entry_address_tag_end:
+
+.align 8
+.short MULTIBOOT_HEADER_TAG_END
+.short 0
+.long 8
+multiboot_header_end:
 
 .section .bss
 .align 16
@@ -29,18 +47,16 @@ stack_bot:
 .section .multiboot.text, "ax"
 .globl _start
 .extern entry_pgdir
-.extern mboot_magic
-.extern mboot_info
 _start:
         cli
 
         // store mboot header
         movl    $mboot_magic, %ecx
         movl    %eax, -KERN_BASE(%ecx)
-        movl    $mboot_info, %edx
+        movl    $__mboot_info, %edx
         leal    -KERN_BASE(%edx), %edi
         movl    %ebx, %esi
-        movl    $SIZEOF_STRUCT_MULTIBOOT_INFO, %ecx
+        movl    (%ebx), %ecx
         rep     movsb
 
         // enable paging
@@ -55,8 +71,15 @@ _start:
         movl    %ebx, %cr0
 
         jmp     start
+_end:
 
 .section .text
+mboot_magic:
+.long 0
+.align 8
+__mboot_info:
+.fill 500, 1, 0
+
 .extern gdt_desc
 .extern isr_install
 .extern main
@@ -83,6 +106,9 @@ start:
         call    isr_install
         sti
 
+        pushl   $__mboot_info
+        movl    (mboot_magic), %eax
+        pushl   %eax
         call    main
 2:
         jmp     2b

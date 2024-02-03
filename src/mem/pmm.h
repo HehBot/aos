@@ -3,9 +3,9 @@
 
 #include <stdint.h>
 
-typedef struct multiboot_info multiboot_info_t;
+struct multiboot_mmap_entry;
 
-void init_pmm(multiboot_info_t const* mboot_info);
+void init_pmm(struct multiboot_mmap_entry const* mmap_entries, size_t nr_entries);
 int pmm_reserve_frame(uintptr_t phys_addr);
 int pmm_reserve_large_frame(uintptr_t phys_addr);
 uintptr_t pmm_get_frame();

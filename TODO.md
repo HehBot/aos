@@ -3,6 +3,6 @@ TODO
    - with block-level disk writeback caching
  - multiprocessing
  - misc
-   - multiboot2
+   - get run_disk working
    - remove UB
      - find some way/tool to detect possible UBs

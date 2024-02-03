@@ -11,4 +11,6 @@ char* strcpy(char* dest, char const* src);
 size_t strlen(char const* s);
 int strcmp(char const* s1, char const* s2);
 
+int memcmp(void const* s1, void const* s2, size_t n);
+
 #endif // STRING_H

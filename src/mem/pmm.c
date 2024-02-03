@@ -3,9 +3,10 @@
 #include "kwmalloc.h"
 
 #include <cpu/x86.h>
-#include <multiboot.h>
+#include <multiboot2.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 struct section {
     uintptr_t addr, ul;
@@ -16,7 +17,7 @@ struct section {
 } __attribute__((packed));
 typedef struct section section_t;
 
-static section_t* sections;
+static section_t* sections = NULL;
 
 // tell physical memory manager about availabe regions of RAM
 static void pmm_add_physical(uintptr_t addr, uint32_t len)
@@ -30,6 +31,7 @@ static void pmm_add_physical(uintptr_t addr, uint32_t len)
     if (z->bitmap_size << (PAGE_ORDER + 5) != z->ul - z->addr)
         z->bitmap_size += 1;
     z->bitmap = kwmalloc(sizeof(z->bitmap[0]) * (z->bitmap_size));
+    memset(z->bitmap, 0, sizeof(z->bitmap[0]) * (z->bitmap_size));
     if (sections == NULL)
         sections = z->next = z;
     else {
@@ -37,12 +39,11 @@ static void pmm_add_physical(uintptr_t addr, uint32_t len)
         sections->next = z;
     }
 }
-void init_pmm(multiboot_info_t const* mboot_info)
+void init_pmm(struct multiboot_mmap_entry const* mmap_entries, size_t nr_entries)
 {
-    for (size_t i = 0; i < mboot_info->mmap_length; i += sizeof(multiboot_memory_map_t)) {
-        multiboot_memory_map_t* mmmt = (multiboot_memory_map_t*)(mboot_info->mmap_addr + KERN_BASE + i);
-        if (mmmt->type == MULTIBOOT_MEMORY_AVAILABLE)
-            pmm_add_physical(mmmt->addr_low, mmmt->len_low);
+    for (size_t i = 0; i < nr_entries; i++) {
+        if (mmap_entries[i].type == MULTIBOOT_MEMORY_AVAILABLE)
+            pmm_add_physical(mmap_entries[i].addr_low, mmap_entries[i].len_low);
     }
 }
 

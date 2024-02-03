@@ -51,3 +51,13 @@ int strcmp(char const* s1, char const* s2)
         ;
     return (*s1 - *s2);
 }
+
+int memcmp(void const* s1, void const* s2, size_t n)
+{
+    uint8_t* m1 = (uint8_t*)s1;
+    uint8_t* m2 = (uint8_t*)s2;
+    for (size_t i = 0; i < n; ++i)
+        if (m1[i] != m2[i])
+            return ((int)m1[i]) - ((int)m2[i]);
+    return 0;
+}

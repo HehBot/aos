@@ -31,7 +31,7 @@ ASMFLAGS := -c -g
 CFLAGS := -c -g -Wall -Wextra -Werror -ffreestanding -nostdlib -MMD -MP $(INC_FLAGS)
 LDFLAGS := -T linker.ld
 
-EMU_FLAGS := -no-reboot -no-shutdown
+EMU_FLAGS := -smp cpus=4,cores=1,threads=1,sockets=4
 
 run_cdrom: $(BOOTCDROM) $(DISK)
 	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw -drive file=$(DISK),index=1,media=disk,format=raw

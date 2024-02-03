@@ -14,15 +14,12 @@
 #include <mem/kwmalloc.h>
 #include <mem/mm.h>
 #include <mem/pmm.h>
-#include <multiboot.h>
+#include <multiboot2.h>
 #include <proc/proc.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-
-multiboot_info_t mboot_info;
-uint32_t mboot_magic;
 
 extern mem_map_t kernel_mem_map[];
 
@@ -30,19 +27,9 @@ size_t block_size;
 
 fs_node_t* root;
 
-static mem_map_t* read_module_map(multiboot_module_t* mods, size_t count)
+static void map_modules(mem_map_t* map, size_t nr_mods)
 {
-    mem_map_t* map = kwmalloc((count + 1) * (sizeof map[0]));
-    for (size_t i = 0; i < count; ++i) {
-        mem_map_t m = { 1, 0, 0, 0, { { mods[i].mod_start, mods[i].mod_end } } };
-        map[i] = m;
-    }
-    map[mboot_info.mods_count].present = 0;
-    return map;
-}
-static void map_modules(mem_map_t* map)
-{
-    for (size_t i = 0; map[i].present; ++i) {
+    for (size_t i = 0; i < nr_mods; ++i) {
         uintptr_t pa = map[i].phy_start;
         size_t nr_pages = PG_ROUND_UP(map[i].phy_end - pa) / PAGE_SIZE;
         uintptr_t va = (uintptr_t)kpalloc(nr_pages);
@@ -53,32 +40,84 @@ static void map_modules(mem_map_t* map)
     }
 }
 
-void main(void)
+#define ROUND_UP_8(x) ((((x) + 7) >> 3) << 3)
+
+void __attribute__((cdecl)) main(uint32_t mboot_magic, uintptr_t __mboot_info)
 {
-    if (mboot_magic != MULTIBOOT_BOOTLOADER_MAGIC
-        || !(mboot_info.flags & MULTIBOOT_INFO_MEM_MAP)
-        || !(mboot_info.flags & MULTIBOOT_INFO_FRAMEBUFFER_INFO))
+    if (mboot_magic != MULTIBOOT2_BOOTLOADER_MAGIC)
         return;
 
-    // 0. read module mappings
-    mem_map_t* mod_mem_map = read_module_map((multiboot_module_t*)(mboot_info.mods_addr + KERN_BASE), mboot_info.mods_count);
+#define MAX_MODS 10
+    mem_map_t mod_mem_map[MAX_MODS];
+    size_t nr_mods = 0;
 
-    // 1. initialise pmm
-    init_pmm(&mboot_info);
+    struct multiboot_tag_framebuffer fbinfo;
+
+    uint8_t* p = ((uint8_t*)__mboot_info) + 8;
+    int done = 0;
+    while (!done) {
+        struct multiboot_tag* tag = (struct multiboot_tag*)p;
+        switch (tag->type) {
+        case MULTIBOOT_TAG_TYPE_END:
+            done = 1;
+            break;
+        case MULTIBOOT_TAG_TYPE_FRAMEBUFFER:
+            memcpy(&fbinfo, (struct multiboot_tag_framebuffer*)tag, sizeof(struct multiboot_tag_framebuffer));
+            goto end;
+        case MULTIBOOT_TAG_TYPE_MMAP: {
+            struct multiboot_tag_mmap* tag_mmap = (struct multiboot_tag_mmap*)tag;
+            size_t nr_entries = (tag_mmap->size - sizeof(*tag_mmap)) / sizeof(tag_mmap->entries[0]);
+            init_pmm(&tag_mmap->entries[0], nr_entries);
+        }
+            goto end;
+        case MULTIBOOT_TAG_TYPE_ACPI_NEW:
+            goto end;
+        case MULTIBOOT_TAG_TYPE_MODULE: {
+            if (nr_mods < MAX_MODS) {
+                struct multiboot_tag_module* tag_module = (struct multiboot_tag_module*)tag;
+                mem_map_t m = { 1, 0, 0, 0, { { tag_module->mod_start, tag_module->mod_end } } };
+                mod_mem_map[nr_mods] = m;
+                nr_mods++;
+            }
+        }
+            goto end;
+        case MULTIBOOT_TAG_TYPE_CMDLINE:
+        case MULTIBOOT_TAG_TYPE_BOOT_LOADER_NAME:
+        case MULTIBOOT_TAG_TYPE_BASIC_MEMINFO:
+        case MULTIBOOT_TAG_TYPE_BOOTDEV:
+        case MULTIBOOT_TAG_TYPE_VBE:
+        case MULTIBOOT_TAG_TYPE_ELF_SECTIONS:
+        case MULTIBOOT_TAG_TYPE_APM:
+        case MULTIBOOT_TAG_TYPE_EFI32:
+        case MULTIBOOT_TAG_TYPE_EFI64:
+        case MULTIBOOT_TAG_TYPE_SMBIOS:
+        case MULTIBOOT_TAG_TYPE_ACPI_OLD:
+        case MULTIBOOT_TAG_TYPE_NETWORK:
+        case MULTIBOOT_TAG_TYPE_EFI_MMAP:
+        case MULTIBOOT_TAG_TYPE_EFI_BS:
+        case MULTIBOOT_TAG_TYPE_EFI32_IH:
+        case MULTIBOOT_TAG_TYPE_EFI64_IH:
+        case MULTIBOOT_TAG_TYPE_LOAD_BASE_ADDR:
+        end:
+            p += ROUND_UP_8(tag->size);
+            continue;
+        }
+    }
+
     for (size_t i = 0; kernel_mem_map[i].present; ++i)
         if (kernel_mem_map[i].mapped)
             for (uintptr_t phy = kernel_mem_map[i].phy_start; phy < kernel_mem_map[i].phy_end; phy += PAGE_SIZE)
                 pmm_reserve_frame(phy);
-    for (size_t i = 0; mod_mem_map[i].present; ++i)
+    for (size_t i = 0; i < nr_mods; ++i)
         for (uintptr_t phy = mod_mem_map[i].phy_start; phy < mod_mem_map[i].phy_end; phy += PAGE_SIZE)
             pmm_reserve_frame(phy);
 
     // 2. initialise mm, kernel heap, map modules
     init_mm();
-    map_modules(mod_mem_map);
+    map_modules(mod_mem_map, nr_mods);
 
     // 3. initialise screen
-    init_screen(&mboot_info);
+    init_screen(&fbinfo);
 
     // 4. initialise ata and disk cache
     size_t fsdisk = ata_init();

@@ -216,7 +216,6 @@ static void print_kheap(void)
         printf("\n");
     }
 }
- */
 void test_kpalloc(void)
 {
     //     print_kheap();
@@ -237,3 +236,4 @@ void test_kpalloc(void)
     kpfree(p);
     //     print_kheap();
 }
+ */
