@@ -2,7 +2,6 @@
 
 #include <cpu/port.h>
 #include <cpu/x86.h>
-#include <mem/kpalloc.h>
 #include <mem/mm.h>
 #include <multiboot2.h>
 #include <stddef.h>
@@ -21,11 +20,9 @@ void init_screen(struct multiboot_tag_framebuffer const* fbinfo)
 {
     struct multiboot_tag_framebuffer_common const* common = &fbinfo->common;
 
-    size_t pgs = PG_ROUND_UP(common->framebuffer_width * (common->framebuffer_height + 1) * (common->framebuffer_bpp >> 3)) / PAGE_SIZE;
+    size_t fb_size = (common->framebuffer_width * (common->framebuffer_height + 1) * (common->framebuffer_bpp >> 3));
 
-    vid_mem = kpalloc(pgs);
-    for (size_t i = 0; i < pgs; ++i)
-        remap_page(common->framebuffer_addr_low + i * PAGE_SIZE, (uintptr_t)vid_mem + i * PAGE_SIZE, PTE_W);
+    vid_mem = map_phy(common->framebuffer_addr_low, fb_size, PTE_W);
 
     screen_rows = common->framebuffer_height;
     screen_cols = common->framebuffer_width;

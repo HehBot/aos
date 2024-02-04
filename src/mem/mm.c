@@ -1,3 +1,4 @@
+#include <cpu/page.h>
 #include <cpu/x86.h>
 #include <liballoc.h>
 #include <mem/kpalloc.h>
@@ -56,15 +57,15 @@ void init_mm(void)
         uint8_t perms = kernel_mem_map[i].perms | PTE_P;
         if (kernel_mem_map[i].mapped) {
             for (uintptr_t virt = kernel_mem_map[i].virt, phy = kernel_mem_map[i].phy_start; phy < kernel_mem_map[i].phy_end; virt += PAGE_SIZE, phy += PAGE_SIZE)
-                pgtb->pages[PTX(virt)] = (phy & 0xfffff000) | perms;
+                pgtb->pages[PTX(virt)] = PA_FRAME(phy) | perms;
         } else {
             uintptr_t ul = kernel_mem_map[i].virt + kernel_mem_map[i].nr_pages * PAGE_SIZE;
             for (uintptr_t virt = kernel_mem_map[i].virt; virt < ul; virt += PAGE_SIZE)
-                pgtb->pages[PTX(virt)] = (pmm_get_frame() & 0xfffff000) | perms;
+                pgtb->pages[PTX(virt)] = PA_FRAME(pmm_get_frame()) | perms;
         }
     }
 
-    uintptr_t entry_pgdir_frame = (pgtb->pages[PTX((uintptr_t)entry_pgdir)] & 0xfffff000);
+    uintptr_t entry_pgdir_frame = PTE_FRAME(pgtb->pages[PTX((uintptr_t)entry_pgdir)]);
     pgtb->pages[PTX((uintptr_t)entry_pgdir)] = pgtb_phy | PTE_W | PTE_P;
 
     // 3. add meta page table in kernel mapping
@@ -111,101 +112,127 @@ static inline pte_t* get_pte(page_directory_t* d, uintptr_t va, int make)
         return NULL;
 }
 
-// map page at given virt addr to given phy addr with given flags
-int map_page(uintptr_t pa, uintptr_t va, uint8_t flags)
+// map given virt addr range to given phy addr range with given flags
+void map(uintptr_t phy, void* virt, size_t len, uint8_t flags)
 {
-    pte_t* pte = get_pte(current_dir, va, 1);
-    if (!pte || *pte & PTE_P)
-        return 0;
-    *pte = (pa & 0xfffff000) | flags | PTE_P;
-    invlpg(va);
+    uintptr_t v = (uintptr_t)virt;
+    for (uintptr_t va = v, pa = PA_FRAME(phy); va < v + len; va += PAGE_SIZE, pa += PAGE_SIZE) {
+        pte_t* pte = get_pte(current_dir, va, 1);
+        if (*pte & PTE_P)
+            PANIC();
+        *pte = pa | flags | PTE_P;
+        invlpg(va);
+    }
 
     // kernel mappings have to be updated in all page dirs
-    if (va >= KERN_BASE) {
+    if (v >= KERN_BASE) {
         for (size_t i = 0; i < pgdir_list_size; ++i) {
             if (pgdir_list[i] == current_dir || pgdir_list[i] == NULL)
                 continue;
-            pte = get_pte(pgdir_list[i], va, 1);
-            *pte = (pa & 0xfffff000) | flags | PTE_P;
+            for (uintptr_t va = v, pa = PA_FRAME(phy); va < v + len; va += PAGE_SIZE, pa += PAGE_SIZE) {
+                pte_t* pte = get_pte(current_dir, va, 1);
+                *pte = pa | flags | PTE_P;
+            }
         }
     }
-
-    return 1;
 }
 
-// remap page at given virt addr to given phy addr with given flags
-// if pa == -1 then old pa is used, else new pa is used and old frame is freed
-int remap_page(uintptr_t pa, uintptr_t va, uint8_t flags)
+// remap given virt addr range to given phy addr range with given flags
+// if phy == -1 then
+//      old phy addr range is used
+// else
+//      new phy addr range is used and old frames are freed
+void remap(uintptr_t phy, void* virt, size_t len, uint8_t flags)
 {
-    pte_t* pte = get_pte(current_dir, va, 0);
-    if (!pte || !(*pte & PTE_P))
-        return 0;
-    if (pa + 1 == 0)
-        pa = (*pte);
-    else
-        pmm_free_frame((*pte) & 0xfffff000);
-    *pte = (pa & 0xfffff000) | flags | PTE_P;
-    invlpg(va);
+    uintptr_t v = (uintptr_t)virt;
 
-    // kernel mappings have to be updated in all page dirs
-    if (va >= KERN_BASE) {
+    int use_old = (phy + 1 == 0);
+    if (use_old) {
+        for (uintptr_t va = v; va < v + len; va += PAGE_SIZE) {
+            pte_t* pte = get_pte(current_dir, va, 0);
+            if (!pte || !(*pte & PTE_P))
+                PANIC();
+            *pte = PTE_FRAME(*pte) | flags | PTE_P;
+            invlpg(va);
+        }
+        // kernel mappings have to be updated in all page dirs
         for (size_t i = 0; i < pgdir_list_size; ++i) {
             if (pgdir_list[i] == current_dir || pgdir_list[i] == NULL)
                 continue;
-            pte = get_pte(pgdir_list[i], va, 1);
-            *pte = (pa & 0xfffff000) | flags | PTE_P;
+            for (uintptr_t va = v; va < v + len; va += PAGE_SIZE) {
+                pte_t* pte = get_pte(current_dir, va, 0);
+                *pte = PTE_FRAME(*pte) | flags | PTE_P;
+            }
+        }
+    } else {
+        for (uintptr_t va = v, pa = PA_FRAME(phy); va < v + len; va += PAGE_SIZE, pa += PAGE_SIZE) {
+            pte_t* pte = get_pte(current_dir, va, 0);
+            if (!pte || !(*pte & PTE_P))
+                PANIC();
+            pmm_free_frame(PTE_FRAME(*pte));
+            *pte = pa | flags | PTE_P;
+            invlpg(va);
+        }
+        // kernel mappings have to be updated in all page dirs
+        for (size_t i = 0; i < pgdir_list_size; ++i) {
+            if (pgdir_list[i] == current_dir || pgdir_list[i] == NULL)
+                continue;
+            for (uintptr_t va = v, pa = PA_FRAME(phy); va < v + len; va += PAGE_SIZE, pa += PAGE_SIZE) {
+                pte_t* pte = get_pte(pgdir_list[i], va, 1);
+                *pte = pa | flags | PTE_P;
+            }
         }
     }
-
-    return 1;
 }
 
-// unmap page at given virt addr and free corresponding frame
-int unmap_page(uintptr_t va)
+// unmap given virt addr range and free frames
+void unmap(void* virt, size_t len)
 {
-    pte_t* pte = get_pte(current_dir, va, 0);
-    if (!pte || !(*pte & PTE_P))
-        return 0;
-    uintptr_t phys = (*pte) & 0xfffff000;
-    pmm_free_frame(phys);
-    *pte = 0;
-    invlpg(va);
+    uintptr_t v = (uintptr_t)virt;
+
+    pte_t* pte;
+    for (uintptr_t va = v; va < v + len; va += PAGE_SIZE) {
+        pte = get_pte(current_dir, va, 0);
+        if (!pte || !(*pte & PTE_P))
+            PANIC();
+        pmm_free_frame(PTE_FRAME(*pte));
+        *pte = 0;
+        invlpg(va);
+    }
 
     // kernel mappings have to be updated in all page dirs
-    if (va >= KERN_BASE) {
+    if (v >= KERN_BASE) {
         for (size_t i = 0; i < pgdir_list_size; ++i) {
             if (pgdir_list[i] == current_dir || pgdir_list[i] == NULL)
                 continue;
-            pte = get_pte(pgdir_list[i], va, 1);
-            *pte = 0;
+            for (uintptr_t va = v; va < v + len; va += PAGE_SIZE) {
+                pte = get_pte(pgdir_list[i], va, 1);
+                *pte = 0;
+            }
         }
     }
-
-    return 1;
 }
 
 // FIXME reduce excess virtual memory usage due to close-by PAs getting different pages
-void* map_pa(uintptr_t pa, size_t len, uint8_t flags)
+void* map_phy(uintptr_t pa, size_t len, uint8_t flags)
 {
     uintptr_t end_pa = pa + len;
     size_t nr_pages;
     // FIXME -1 is a kludge, fix wherever it occurs with unmap_pa
-    if (len + 1 == 0)
+    if (len + 1 == 0) {
         nr_pages = 1;
-    else {
-        nr_pages = PG_ROUND_DOWN(end_pa) - PG_ROUND_DOWN(pa);
+        len = (PG_ROUND_UP(pa + 1) - PG_ROUND_DOWN(pa)) >> PAGE_ORDER;
+    } else {
+        nr_pages = (PG_ROUND_UP(end_pa - 1) - PG_ROUND_DOWN(pa)) >> PAGE_ORDER;
         if (nr_pages == 0)
             nr_pages = 1;
     }
 
     void* tmp = kpalloc(nr_pages);
 
-    size_t i;
-    uintptr_t p, v;
-    for (i = 0, p = pa, v = (uintptr_t)tmp; i < nr_pages; ++i, p += PAGE_SIZE, v += PAGE_SIZE)
-        remap_page(p, v, flags);
+    remap(pa, tmp, len, flags);
 
-    return (void*)(((uintptr_t)tmp) + (pa & 0xfff));
+    return (void*)(((uintptr_t)tmp) + PA_OFF(pa));
 }
 
 size_t alloc_page_directory(void)
@@ -230,7 +257,7 @@ size_t alloc_page_directory(void)
     }
 
     pgdir_list[d] = p;
-    pgdir_phy_addr_list[d] = ((*get_pte(p, (uintptr_t)p, 0)) & 0xfffff000) | (((uintptr_t)p) & 0xfff);
+    pgdir_phy_addr_list[d] = PTE_FRAME(*get_pte(p, (uintptr_t)p, 0)) | (((uintptr_t)p) & 0xfff);
 
     return d;
 }
@@ -249,7 +276,7 @@ void free_page_directory(size_t d)
             else {
                 for (size_t j = 0; j < 1024; ++j) {
                     if (p->tables[i]->pages[j] & PTE_P)
-                        pmm_free_frame(p->tables[i]->pages[j] & 0xfffff000);
+                        pmm_free_frame(PTE_FRAME(p->tables[i]->pages[j]));
                 }
                 kpfree(p->tables[i]);
             }

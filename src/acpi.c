@@ -39,8 +39,8 @@ typedef struct madt {
 // see https://wiki.osdev.org/MADT
 static void parse_madt(madt_t const* madt)
 {
-    // FIXME find out the max size here
-    lapic = map_pa(madt->lapic_pa, 0x500, PTE_W);
+    // FIXME max size as macro
+    lapic = map_phy(madt->lapic_pa, 0x400, PTE_W);
     uint8_t const* p = madt->entries;
     while (p < (madt->entries + (madt->header.len - sizeof(*madt)))) {
         switch (p[0]) {
@@ -55,7 +55,7 @@ static void parse_madt(madt_t const* madt)
         case 1:
             // ioapic
             ioapic_id = p[2];
-            ioapic = map_pa(*(uintptr_t*)(&p[4]), sizeof(*ioapic), PTE_W);
+            ioapic = map_phy(*(uintptr_t*)(&p[4]), sizeof(*ioapic), PTE_W);
             goto end;
         end:
         default:
@@ -78,7 +78,7 @@ void init_acpi(void const* __rsdp)
 
     uintptr_t table_pa = rsdp->rsdt_pa;
     // TODO wtf is the size here?? need unmap_pa
-    rsdt_t* rsdt = map_pa(table_pa, -1, 0);
+    rsdt_t* rsdt = map_phy(table_pa, -1, 0);
 
     uint8_t sum;
     if (memcmp(rsdt->header.sign, "RSDT", 4) != 0 || (sum = memsum(rsdt, rsdt->header.len) != 0)) {
@@ -95,7 +95,7 @@ void init_acpi(void const* __rsdp)
     for (size_t i = 0; i < nr_rsdt_entries; ++i) {
         table_pa = rsdt->other_sdt[i];
         // TODO wtf is the size here?? need unmap_pa
-        acpi_sdt_header_t* h = map_pa(table_pa, -1, 0);
+        acpi_sdt_header_t* h = map_phy(table_pa, -1, 0);
 
         printf(" ");
         for (int j = 0; j < 4; ++j)

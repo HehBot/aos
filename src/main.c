@@ -81,11 +81,11 @@ static void map_modules()
     for (size_t i = 0; i < nr_mods; ++i) {
         uintptr_t pa = mod_mem_map[i].phy_start;
         size_t nr_pages = PG_ROUND_UP(mod_mem_map[i].phy_end - pa) / PAGE_SIZE;
-        uintptr_t va = (uintptr_t)kpalloc(nr_pages);
+        size_t len = mod_mem_map[i].phy_end - pa;
+        uintptr_t va = (uintptr_t)map_phy(pa, len, PTE_W);
         mod_mem_map[i].virt = va;
         mod_mem_map[i].nr_pages = nr_pages;
-        for (size_t i = 0; i < nr_pages; ++i, pa += PAGE_SIZE, va += PAGE_SIZE)
-            remap_page(pa, va, PTE_W);
+        mod_mem_map[i].mapped = 1;
     }
 }
 

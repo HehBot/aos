@@ -58,7 +58,7 @@ proc_t* alloc_proc(void)
 
     p->code = 0x0;
     p->stack = (KERN_BASE - 16);
-    map_page(pmm_get_frame(), p->stack, PTE_W | PTE_U);
+    map(pmm_get_frame(), (void*)PG_ROUND_DOWN(p->stack), PAGE_SIZE, PTE_W | PTE_U);
 
     cpu_state_t cpu_state = { 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, USER_DATA_SEG, USER_DATA_SEG, USER_DATA_SEG, USER_DATA_SEG, 0x0, 0x0, p->code, USER_CODE_SEG, 0x0, p->stack, USER_DATA_SEG };
     p->cpu_state = cpu_state;

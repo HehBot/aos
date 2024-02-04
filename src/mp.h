@@ -10,7 +10,9 @@ typedef struct {
 } cpu_t;
 typedef struct {
     uint32_t reg;
-    uint32_t __pad[3];
+    uint32_t : 32;
+    uint32_t : 32;
+    uint32_t : 32;
     uint32_t data;
 } ioapic_t;
 
@@ -18,7 +20,7 @@ typedef struct {
 extern cpu_t cpus[MAX_CPUS];
 extern size_t nr_cpus;
 
-extern uint8_t volatile* lapic;
+extern uint32_t volatile* lapic;
 
 extern ioapic_t volatile* ioapic;
 extern uint8_t ioapic_id;

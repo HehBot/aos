@@ -82,7 +82,7 @@ void* kpalloc(size_t n)
         // nr = (nr * 3) / 2;
 
         for (uintptr_t virt = end; virt < end + nr * PAGE_SIZE; virt += PAGE_SIZE)
-            map_page(pmm_get_frame(), virt, PTE_W);
+            map(pmm_get_frame(), (void*)virt, PAGE_SIZE, PTE_W);
 
         if (free_list_end != NULL && free_list_end->addr + free_list_end->sz * PAGE_SIZE == end)
             free_list_end->sz += nr;
@@ -191,49 +191,3 @@ int kpfree(void* a)
     }
     return 0;
 }
-
-/*
-#include <stdio.h>
-static void print_kheap(void)
-{
-    run_t* p = occ_list;
-    printf("Page allocator status:\n");
-    if (p == NULL)
-        printf("  No occu\n");
-    else {
-        printf("  Occu:\n");
-        for (; p != NULL; p = p->next)
-            printf("0x%x-0x%x %dpg; ", p->addr, p->addr+p->sz*PAGE_SIZE, p->sz);
-        printf("\n");
-    }
-    p = free_list;
-    if (p == NULL)
-        printf("  No free\n");
-    else {
-        printf("  Free:\n");
-        for (; p != NULL; p = p->next)
-            printf("0x%x-0x%x %dpg; ", p->addr, p->addr+p->sz*PAGE_SIZE, p->sz);
-        printf("\n");
-    }
-}
-void test_kpalloc(void)
-{
-    //     print_kheap();
-    void* p = kpalloc(721);
-    //     print_kheap();
-    void* p2 = kpalloc(4);
-    //     print_kheap();
-    kpfree(p);
-    //     print_kheap();
-    p = kpalloc(800);
-    //     print_kheap();
-    kpfree(p2);
-    //     print_kheap();
-    kpfree(p);
-    //     print_kheap();
-    p = kpalloc(1000);
-    //     print_kheap();
-    kpfree(p);
-    //     print_kheap();
-}
- */
