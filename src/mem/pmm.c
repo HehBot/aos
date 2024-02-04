@@ -39,8 +39,11 @@ static void pmm_add_physical(uintptr_t addr, uint32_t len)
         sections->next = z;
     }
 }
-void init_pmm(struct multiboot_mmap_entry const* mmap_entries, size_t nr_entries)
+void init_pmm(struct multiboot_tag_mmap const* mmap_info)
 {
+    struct multiboot_mmap_entry const* mmap_entries = &mmap_info->entries[0];
+    size_t nr_entries = (mmap_info->size - sizeof(*mmap_info)) / sizeof(mmap_info->entries[0]);
+
     for (size_t i = 0; i < nr_entries; i++) {
         if (mmap_entries[i].type == MULTIBOOT_MEMORY_AVAILABLE)
             pmm_add_physical(mmap_entries[i].addr_low, mmap_entries[i].len_low);

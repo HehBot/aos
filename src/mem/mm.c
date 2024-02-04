@@ -184,6 +184,30 @@ int unmap_page(uintptr_t va)
     return 1;
 }
 
+// FIXME reduce excess virtual memory usage due to close-by PAs getting different pages
+void* map_pa(uintptr_t pa, size_t len, uint8_t flags)
+{
+    uintptr_t end_pa = pa + len;
+    size_t nr_pages;
+    // FIXME -1 is a kludge, fix wherever it occurs with unmap_pa
+    if (len + 1 == 0)
+        nr_pages = 1;
+    else {
+        nr_pages = PG_ROUND_DOWN(end_pa) - PG_ROUND_DOWN(pa);
+        if (nr_pages == 0)
+            nr_pages = 1;
+    }
+
+    void* tmp = kpalloc(nr_pages);
+
+    size_t i;
+    uintptr_t p, v;
+    for (i = 0, p = pa, v = (uintptr_t)tmp; i < nr_pages; ++i, p += PAGE_SIZE, v += PAGE_SIZE)
+        remap_page(p, v, flags);
+
+    return (void*)(((uintptr_t)tmp) + (pa & 0xfff));
+}
+
 size_t alloc_page_directory(void)
 {
     page_directory_t* p = kpalloc(PG_ROUND_UP(sizeof(*p)) / PAGE_SIZE);
