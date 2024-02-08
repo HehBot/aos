@@ -19,7 +19,7 @@ static void putuint(int* arg, int length, unsigned int base);
 static char const l[] = "0123456789ABCDEF";
 static char buf[11];
 
-void __attribute__((cdecl)) printf(char const* fmt, ...)
+void __attribute__((cdecl, format(printf, 1, 2))) printf(char const* fmt, ...)
 {
     int* argp = (int*)(&fmt);
     printf_state_t state = PRINTF_STATE_NORMAL;

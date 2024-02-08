@@ -1,5 +1,8 @@
+#include "acpi.h"
+
+#include <cpu/ioapic.h>
+#include <cpu/mp.h>
 #include <mem/mm.h>
-#include <mp.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -37,10 +40,11 @@ typedef struct madt {
 } __attribute__((packed)) madt_t;
 
 // see https://wiki.osdev.org/MADT
-static void parse_madt(madt_t const* madt)
+static acpi_info_t parse_madt(madt_t const* madt)
 {
-    // FIXME max size as macro
-    lapic = map_phy(madt->lapic_pa, 0x400, PTE_W);
+    acpi_info_t info;
+
+    info.lapic_addr = madt->lapic_pa;
     uint8_t const* p = madt->entries;
     while (p < (madt->entries + (madt->header.len - sizeof(*madt)))) {
         switch (p[0]) {
@@ -54,8 +58,8 @@ static void parse_madt(madt_t const* madt)
             goto end;
         case 1:
             // ioapic
-            ioapic_id = p[2];
-            ioapic = map_phy(*(uintptr_t*)(&p[4]), sizeof(*ioapic), PTE_W);
+            info.ioapic_addr = *(uintptr_t*)(&p[4]);
+            info.ioapic_id = p[2];
             goto end;
         end:
         default:
@@ -63,17 +67,18 @@ static void parse_madt(madt_t const* madt)
             continue;
         }
     }
+
+    return info;
 }
 
-void init_acpi(void const* __rsdp)
+acpi_info_t init_acpi(void const* __rsdp)
 {
     rsdp_t const* rsdp = __rsdp;
     if (rsdp == NULL
         || memcmp(rsdp->sign, "RSD PTR ", 8) != 0
         || rsdp->version != 0
         || memsum(rsdp, sizeof(*rsdp)) != 0) {
-        printf("Bad RSDP\n");
-        return;
+        PANIC("Bad RSDP");
     }
 
     uintptr_t table_pa = rsdp->rsdt_pa;
@@ -81,17 +86,18 @@ void init_acpi(void const* __rsdp)
     rsdt_t* rsdt = map_phy(table_pa, -1, 0);
 
     uint8_t sum;
-    if (memcmp(rsdt->header.sign, "RSDT", 4) != 0 || (sum = memsum(rsdt, rsdt->header.len) != 0)) {
-        printf("Bad RSDT\n");
-        return;
-    }
+    if (memcmp(rsdt->header.sign, "RSDT", 4) != 0 || (sum = memsum(rsdt, rsdt->header.len) != 0))
+        PANIC("Bad RSDT");
 
     size_t nr_rsdt_entries = ((rsdt->header.len - sizeof(rsdt->header)) / sizeof(rsdt->other_sdt[0]));
     printf("[ACPI: ");
     if (nr_rsdt_entries > 0)
         printf("Detected tables");
     else
-        printf("No tables found");
+        PANIC("No ACPI tables found");
+
+    acpi_info_t ret;
+
     for (size_t i = 0; i < nr_rsdt_entries; ++i) {
         table_pa = rsdt->other_sdt[i];
         // TODO wtf is the size here?? need unmap_pa
@@ -101,7 +107,9 @@ void init_acpi(void const* __rsdp)
         for (int j = 0; j < 4; ++j)
             printf("%c", h->sign[j]);
         if (memsum(h, h->len) == 0 && !memcmp(h->sign, "APIC", 4))
-            parse_madt((void*)h);
+            ret = parse_madt((void*)h);
     }
     printf("]\n");
+
+    return ret;
 }

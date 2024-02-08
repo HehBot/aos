@@ -32,7 +32,7 @@ static inline run_t* alloc_run()
             last = i;
             return &pool[i];
         }
-    PANIC();
+    PANIC("Unable to allocate run");
 }
 static inline void free_run(run_t* p)
 {

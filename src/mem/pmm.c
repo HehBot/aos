@@ -115,8 +115,7 @@ uintptr_t pmm_get_frame()
         }
         p = p->next;
     } while (p != sections);
-    PANIC();
-    return 0;
+    PANIC("Out of frames!");
 }
 // get large frame
 uintptr_t pmm_get_large_frame()
@@ -140,8 +139,7 @@ uintptr_t pmm_get_large_frame()
         }
         p = p->next;
     } while (p != sections);
-    PANIC();
-    return 0;
+    PANIC("Out of large frames!");
 }
 int pmm_free_frame(uintptr_t addr)
 {

@@ -80,12 +80,12 @@ mboot_magic:
 __mboot_info:
 .fill 500, 1, 0
 
-.extern gdt_desc
+.extern entry_gdt_desc
 .extern isr_install
 .extern main
 start:
         // load GDT
-        lgdt    gdt_desc
+        lgdt    entry_gdt_desc
         // fix segments
         ljmp    $KERNEL_CODE_SEG, $1f
 1:
@@ -98,13 +98,6 @@ start:
         movl    $stack_bot, %ebp
         movw    %ax, %ss
         movl    %ebp, %esp
-
-        // remove identity map entry
-        movl    $0x0, entry_pgdir
-
-        // install interrupt handlers and enable interrupts
-        call    isr_install
-        sti
 
         pushl   $__mboot_info
         movl    (mboot_magic), %eax

@@ -2,24 +2,36 @@
 #define X86_H
 
 #ifndef __ASSEMBLER__
+    #include <stdarg.h>
     #include <stddef.h>
     #include <stdint.h>
+    #include <stdio.h>
 #endif // __ASSEMBLER__
 
 #define KERN_BASE 0xc0000000
 
 // General
 #ifndef __ASSEMBLER__
-static inline _Noreturn void PANIC()
-{
-    asm("int $0x1");
-    __builtin_unreachable();
-}
 static inline _Noreturn void HALT()
 {
     asm("cli; hlt");
     __builtin_unreachable();
 }
+    #define PANIC(str)                                                   \
+        do {                                                             \
+            printf("%s:%d,%s: %s\n", __FILE__, __LINE__, __func__, str); \
+            HALT();                                                      \
+        } while (0)
+
+// EFLAGS
+static inline uint32_t get_eflags(void)
+{
+    uint32_t eflags;
+    asm volatile("pushfl; popl %0"
+                 : "=r"(eflags));
+    return eflags;
+}
+    #define EFLAGS_INT 0x00000200
 
 // IDT
 typedef struct {
@@ -44,57 +56,116 @@ typedef struct {
 } __attribute__((packed)) cpu_state_t;
 typedef void (*isr_t)(cpu_state_t*);
 
-static inline void lidt(uintptr_t idt_reg_addr)
+typedef struct {
+    uint16_t low_offset;
+    uint16_t seg;
+    uint8_t always0_1;
+    uint8_t gate_type : 4;
+    uint8_t always0_2 : 1;
+    uint8_t dpl : 2;
+    uint8_t present : 1;
+    uint16_t high_offset;
+} __attribute__((packed)) idt_entry_t;
+
+typedef struct {
+    uint16_t size_m_1;
+    uint32_t base;
+} __attribute__((packed)) idt_register_t;
+
+    #define IDT_ENTRIES 256
+static inline void lidt(idt_entry_t* idt, uint16_t size)
 {
-    asm("lidt (%0)" ::"r"(idt_reg_addr));
+    volatile idt_register_t reg = { size - 1, (uintptr_t)idt };
+    asm volatile("lidt (%0)" ::"r"(&reg));
 }
 #endif // __ASSEMBLER__
 
-#define T_IRQ0 32
-#define T_IRQ1 33
-#define T_IRQ2 34
-#define T_IRQ3 35
-#define T_IRQ4 36
-#define T_IRQ5 37
-#define T_IRQ6 38
-#define T_IRQ7 39
-#define T_IRQ8 40
-#define T_IRQ9 41
-#define T_IRQ10 42
-#define T_IRQ11 43
-#define T_IRQ12 44
-#define T_IRQ13 45
-#define T_IRQ14 46
-#define T_IRQ15 47
-
 #define T_SYSCALL 0x80
 
-// GDT
+#define T_IRQ0 32
+
+#define IRQ_TIMER (T_IRQ0 + 0)
+#define IRQ_KBD (T_IRQ0 + 1)
+#define IRQ_IDE (T_IRQ0 + 14)
+#define IRQ_ERR (T_IRQ0 + 19)
+#define IRQ_SPUR (T_IRQ0 + 31)
+
+// GDT and TSS
 #ifndef __ASSEMBLER__
 typedef struct gdt_entry {
     uint16_t limit_low;
     uint16_t base_low;
     uint8_t base_mid;
     uint8_t accessed : 1;
-    uint8_t read_write : 1;
+    uint8_t readable_writeable : 1;
     uint8_t conforming_expand_down : 1;
-    uint8_t code : 1;
-    uint8_t code_data_segment : 1;
+    uint8_t data_or_code : 1;
+    uint8_t sys_or_app_seg : 1;
     uint8_t dpl : 2;
     uint8_t present : 1;
     uint8_t limit_high : 4;
-    uint8_t available : 1;
+    uint8_t : 1;
     uint8_t long_mode : 1;
-    uint8_t big : 1;
+    uint8_t type_16b_or_32b : 1;
     uint8_t gran : 1;
     uint8_t base_high;
 } __attribute__((packed)) gdt_entry_t;
+    #define SEG(pl, d_or_c, rw, base, lim)              \
+        (gdt_entry_t)                                   \
+        {                                               \
+            .limit_low = (uint16_t)(lim & 0xffff),      \
+            .base_low = (uint16_t)(base & 0xffff),      \
+            .base_mid = (uint8_t)((base >> 16) & 0xff), \
+            .accessed = 1,                              \
+            .readable_writeable = rw,                   \
+            .conforming_expand_down = 0,                \
+            .data_or_code = d_or_c,                     \
+            .sys_or_app_seg = 1,                        \
+            .dpl = pl,                                  \
+            .present = 1,                               \
+            .limit_high = ((lim >> 16) & 0xf),          \
+            .long_mode = 0,                             \
+            .type_16b_or_32b = 1,                       \
+            .gran = 1,                                  \
+            .base_high = ((base >> 24) & 0xff)          \
+        }
+    #define SEG_TSS(pl, base, lim)                      \
+        (gdt_entry_t)                                   \
+        {                                               \
+            .limit_low = (uint16_t)(lim & 0xffff),      \
+            .base_low = (uint16_t)(base & 0xffff),      \
+            .base_mid = (uint8_t)((base >> 16) & 0xff), \
+            .accessed = 1,                              \
+            .readable_writeable = 0,                    \
+            .conforming_expand_down = 0,                \
+            .data_or_code = 1,                          \
+            .sys_or_app_seg = 0,                        \
+            .dpl = pl,                                  \
+            .present = 1,                               \
+            .limit_high = ((lim >> 16) & 0xf),          \
+            .long_mode = 0,                             \
+            .type_16b_or_32b = 0,                       \
+            .gran = 0,                                  \
+            .base_high = ((base >> 24) & 0xff)          \
+        }
+
+typedef struct tss {
+    uint32_t : 32;
+    uint32_t esp; // kernel stack pointer to load when changing to kernel mode.
+    uint16_t ss; // kernel stack segment to load when changing to kernel mode.
+    uint16_t useless[47];
+} __attribute__((packed)) tss_t;
 typedef struct gdt_desc {
-    uint16_t size;
+    uint16_t size_m_1;
     gdt_entry_t* gdt;
 } __attribute__((packed)) gdt_desc_t;
     #define GDT_STRIDE (sizeof(gdt_entry_t))
 
+static inline void lgdt(gdt_entry_t* gdt, uint16_t size)
+{
+    volatile gdt_desc_t gdtd = { size - 1, gdt };
+    asm volatile("lgdt (%0)" ::"r"(&gdtd));
+}
 static inline void ltr(uint16_t tss_seg)
 {
     asm("ltr %w0" ::"r"(tss_seg));
@@ -103,6 +174,8 @@ static inline void ltr(uint16_t tss_seg)
 #else
     #define GDT_STRIDE 8
 #endif // __ASSEMBLER__
+
+#define NR_GDT_ENTRIES 6
 
 #define KERNEL_CODE_GDT_INDEX 1
 #define KERNEL_DATA_GDT_INDEX 2

@@ -1,12 +1,9 @@
-#include "ext2.h"
-
 #include <acpi.h>
+#include <cpu/interrupt.h>
+#include <cpu/ioapic.h>
+#include <cpu/mp.h>
 #include <cpu/x86.h>
-#include <drivers/disk/ata.h>
-#include <drivers/disk/block.h>
-#include <drivers/keyboard.h>
 #include <drivers/screen.h>
-#include <drivers/timer.h>
 #include <fs/fs.h>
 #include <fs/initrd.h>
 #include <hash_table.h>
@@ -16,14 +13,12 @@
 #include <mem/mm.h>
 #include <mem/pmm.h>
 #include <multiboot2.h>
-#include <proc/proc.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 size_t block_size;
-static fs_node_t* root;
 
 extern mem_map_t kernel_mem_map[];
 
@@ -93,11 +88,9 @@ void __attribute__((cdecl)) main(uint32_t mboot_magic, uintptr_t __mboot_info)
 {
     if (mboot_magic != MULTIBOOT2_BOOTLOADER_MAGIC)
         return;
-    // 0. parse __mboot_info and initialise pmm
     parse_mboot_info(__mboot_info);
 
-    // 1. initialise pmm and reserve kernel and module frames
-    // TODO relaim MULTIBOOT_MEMORY_ACPI_RECLAIMABLE entries
+    // TODO reclaim MULTIBOOT_MEMORY_ACPI_RECLAIMABLE entries
     init_pmm(mmap_info);
     for (size_t i = 0; kernel_mem_map[i].present; ++i)
         if (kernel_mem_map[i].mapped)
@@ -107,75 +100,27 @@ void __attribute__((cdecl)) main(uint32_t mboot_magic, uintptr_t __mboot_info)
         for (uintptr_t phy = mod_mem_map[i].phy_start; phy < mod_mem_map[i].phy_end; phy += PAGE_SIZE)
             pmm_reserve_frame(phy);
 
-    // 2. initialise mm, kernel heap; map modules
     init_mm();
     map_modules(mod_mem_map, nr_mods);
 
-    // 3. initialise screen
     init_screen(fb_info);
 
-    // 4. initialise acpi and detect other processors
-    init_acpi(rsdp);
+    acpi_info_t acpi_info = init_acpi(rsdp);
 
-    // 5. initialise other processors
+    acpi_info.lapic_addr++;
 
-    // initialise ata and disk cache
-    size_t fsdisk = ata_init();
+    init_lapic(acpi_info.lapic_addr);
+    init_seg(); // needs get_cpu which needs lapic initialised
+    init_ioapic(acpi_info.ioapic_addr, acpi_info.ioapic_id);
 
-    // mount initrd to '/'
-    root = read_initrd(mod_mem_map[0].virt);
+    init_isrs();
 
-    // muck around with ext2
-    block_size = 1024; // superblock is of length 1024 at offset 1024 bytes
+    void init_timer(uint32_t freq);
 
-    block_t* b = alloc_block();
-    b->dev = fsdisk;
-    b->block = 1;
-    ata_sync(b);
-    superblock_t* sup = (void*)b->data;
-    b->data = NULL;
-    free_block(b);
-    block_size = (1 << (sup->log_block_sz + 10));
-    size_t inode_size = sup->inode_sz;
+    ioapic_enable(IRQ_KBD, get_cpu()->lapic_id);
 
-    size_t nr_block_grp = (sup->nr_inodes + sup->inodes_per_block_grp - 1) / sup->inodes_per_block_grp;
-    if (nr_block_grp != (sup->nr_blocks + sup->blocks_per_block_grp - 1) / sup->blocks_per_block_grp) {
-        printf("Block group count mismatch\n");
-        return;
-    }
+    init_idt();
 
-    b = alloc_block();
-    b->dev = fsdisk;
-    b->block = (block_size > 1024 ? 1 : 2);
-    ata_sync(b);
-    block_group_desc_t* block_grp_desc_table = (void*)b->data;
-    b->data = NULL;
-    free_block(b);
-
-    size_t root_dir_inode = 2;
-    {
-        size_t block_grp = (root_dir_inode - 1) / sup->inodes_per_block_grp;
-        size_t index = (root_dir_inode - 1) % sup->inodes_per_block_grp;
-        size_t inode_table_block = block_grp_desc_table[block_grp].inode_table_block;
-
-        size_t containing_block = inode_table_block + (index * inode_size / block_size);
-        size_t off = ((index * inode_size) % block_size) / inode_size;
-
-        b = alloc_block();
-        b->dev = fsdisk;
-        b->block = containing_block;
-        ata_sync(b);
-        inode_t root_inode = *(inode_t*)((uintptr_t)b->data + off * inode_size);
-        free_block(b);
-
-        b = alloc_block();
-        b->dev = fsdisk;
-        b->block = root_inode.dbp[0];
-        ata_sync(b);
-    }
-
-    printf("ext2 sign: '0x%x'\n", sup->ext2_sign);
-
-    // 7. initialise proc
-    init_proc();
+    __sync_synchronize();
+    asm volatile("sti");
 }

@@ -29,7 +29,7 @@ static page_directory_t* current_dir;
 void switch_page_directory(size_t d)
 {
     if (d >= pgdir_list_size)
-        PANIC();
+        PANIC("Bad pgdir index to switch to");
     current_dir = pgdir_list[d];
     lcr3(pgdir_phy_addr_list[d]);
 }
@@ -119,7 +119,7 @@ void map(uintptr_t phy, void* virt, size_t len, uint8_t flags)
     for (uintptr_t va = v, pa = PA_FRAME(phy); va < v + len; va += PAGE_SIZE, pa += PAGE_SIZE) {
         pte_t* pte = get_pte(current_dir, va, 1);
         if (*pte & PTE_P)
-            PANIC();
+            PANIC("Tried to map already mapped page");
         *pte = pa | flags | PTE_P;
         invlpg(va);
     }
@@ -151,7 +151,7 @@ void remap(uintptr_t phy, void* virt, size_t len, uint8_t flags)
         for (uintptr_t va = v; va < v + len; va += PAGE_SIZE) {
             pte_t* pte = get_pte(current_dir, va, 0);
             if (!pte || !(*pte & PTE_P))
-                PANIC();
+                PANIC("Tried to remap unmapped page");
             *pte = PTE_FRAME(*pte) | flags | PTE_P;
             invlpg(va);
         }
@@ -168,7 +168,7 @@ void remap(uintptr_t phy, void* virt, size_t len, uint8_t flags)
         for (uintptr_t va = v, pa = PA_FRAME(phy); va < v + len; va += PAGE_SIZE, pa += PAGE_SIZE) {
             pte_t* pte = get_pte(current_dir, va, 0);
             if (!pte || !(*pte & PTE_P))
-                PANIC();
+                PANIC("Tried to remap unmapped page");
             pmm_free_frame(PTE_FRAME(*pte));
             *pte = pa | flags | PTE_P;
             invlpg(va);
@@ -194,7 +194,7 @@ void unmap(void* virt, size_t len)
     for (uintptr_t va = v; va < v + len; va += PAGE_SIZE) {
         pte = get_pte(current_dir, va, 0);
         if (!pte || !(*pte & PTE_P))
-            PANIC();
+            PANIC("Tried to unmap unmapped page");
         pmm_free_frame(PTE_FRAME(*pte));
         *pte = 0;
         invlpg(va);
@@ -265,7 +265,7 @@ size_t alloc_page_directory(void)
 void free_page_directory(size_t d)
 {
     if (d >= pgdir_list_size)
-        PANIC();
+        PANIC("Bad pgdir index to free");
 
     page_directory_t* p = pgdir_list[d];
 

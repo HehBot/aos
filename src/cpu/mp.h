@@ -1,28 +1,27 @@
 #ifndef MP_H
 #define MP_H
 
+#include <cpu/x86.h>
 #include <stddef.h>
 #include <stdint.h>
 
 typedef struct {
     uint8_t acpi_proc_id;
     uint8_t lapic_id;
+    gdt_entry_t gdt[NR_GDT_ENTRIES];
+    tss_t tss;
 } cpu_t;
-typedef struct {
-    uint32_t reg;
-    uint32_t : 32;
-    uint32_t : 32;
-    uint32_t : 32;
-    uint32_t data;
-} ioapic_t;
 
 #define MAX_CPUS 32
 extern cpu_t cpus[MAX_CPUS];
 extern size_t nr_cpus;
 
-extern uint32_t volatile* lapic;
+cpu_t* get_cpu(void);
+uint8_t cpu_id(void);
 
-extern ioapic_t volatile* ioapic;
-extern uint8_t ioapic_id;
+void init_lapic(uintptr_t lapic_addr);
+void init_seg(void);
+
+void lapic_eoi(void);
 
 #endif // MP_H
