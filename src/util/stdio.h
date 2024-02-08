@@ -19,6 +19,6 @@ Supports following specifiers
     x   unsigned int, base 16
 */
 
-void __attribute__((cdecl, format(printf, 1, 2))) printf(char const* fmt, ...);
+void __attribute__((format(printf, 1, 2))) printf(char const* fmt, ...);
 
 #endif // STDIO_H
