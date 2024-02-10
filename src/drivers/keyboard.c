@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define PORT_KEYBOARD_CTRL 0x64
 #define PORT_KEYBOARD_DATA 0x60
 
 static char letter(uint8_t scancode)
@@ -191,6 +192,10 @@ static char letter(uint8_t scancode)
 
 void keyboard_callback(cpu_state_t*)
 {
-    uint8_t sc = port_read_byte(PORT_KEYBOARD_DATA);
-    printf("scancode: 0x%hhx, %c\n", sc, letter(sc));
+    uint8_t status = port_read_byte(PORT_KEYBOARD_CTRL);
+    while (status & 0x1) {
+        uint8_t sc = port_read_byte(PORT_KEYBOARD_DATA);
+        printf("scancode: 0x%hhx, %c\n", sc, letter(sc));
+        status = port_read_byte(PORT_KEYBOARD_CTRL);
+    }
 }

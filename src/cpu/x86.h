@@ -81,14 +81,13 @@ static inline void lidt(idt_entry_t* idt, uint16_t size)
 #endif // __ASSEMBLER__
 
 #define T_SYSCALL 0x80
+#define T_IRQ0 0x20
 
-#define T_IRQ0 32
-
-#define IRQ_TIMER (T_IRQ0 + 0)
-#define IRQ_KBD (T_IRQ0 + 1)
-#define IRQ_IDE (T_IRQ0 + 14)
-#define IRQ_ERR (T_IRQ0 + 19)
-#define IRQ_SPUR (T_IRQ0 + 31)
+#define IRQ_TIMER 0
+#define IRQ_KBD 1
+#define IRQ_IDE 14
+#define IRQ_ERR 19
+#define IRQ_SPUR 31
 
 // GDT and TSS
 #ifndef __ASSEMBLER__

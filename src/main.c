@@ -107,15 +107,11 @@ void __attribute__((cdecl)) main(uint32_t mboot_magic, uintptr_t __mboot_info)
 
     acpi_info_t acpi_info = init_acpi(rsdp);
 
-    acpi_info.lapic_addr++;
-
     init_lapic(acpi_info.lapic_addr);
     init_seg(); // needs get_cpu which needs lapic initialised
     init_ioapic(acpi_info.ioapic_addr, acpi_info.ioapic_id);
 
     init_isrs();
-
-    void init_timer(uint32_t freq);
 
     ioapic_enable(IRQ_KBD, get_cpu()->lapic_id);
 

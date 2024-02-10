@@ -27,7 +27,7 @@ static inline void set_idt_entry(size_t n, void (*isr)(void), uint8_t gate_type,
 void init_isrs(void)
 {
     for (size_t i = 0; i < NR_ISRS; ++i)
-        set_idt_entry(i, isrs[i], GATE_TYPE_TRAP, KERNEL_PL);
+        set_idt_entry(i, isrs[i], GATE_TYPE_INT, KERNEL_PL);
     set_idt_entry(T_SYSCALL, isrs[T_SYSCALL], GATE_TYPE_TRAP, USER_PL);
 }
 
@@ -150,7 +150,7 @@ void syscall(cpu_state_t* cpu_state)
     }
 }
 
-void isr_common(cpu_state_t* cpu_state)
+void __attribute__((cdecl)) isr_common(cpu_state_t* cpu_state)
 {
     int int_no = cpu_state->int_no;
     void keyboard_callback(cpu_state_t*);
@@ -161,11 +161,14 @@ void isr_common(cpu_state_t* cpu_state)
         case T_SYSCALL:
             syscall(cpu_state);
             break;
-        case IRQ_KBD:
+        case T_IRQ0 + IRQ_KBD:
             keyboard_callback(cpu_state);
             lapic_eoi();
             break;
-        case IRQ_TIMER:
+        case T_IRQ0 + IRQ_SPUR:
+            printf("SPURIOUS!\n");
+            break;
+        case T_IRQ0 + IRQ_TIMER:
             printf("TIMER\n");
             lapic_eoi();
             break;

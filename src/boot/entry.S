@@ -102,6 +102,7 @@ start:
         pushl   $__mboot_info
         movl    (mboot_magic), %eax
         pushl   %eax
+        cld
         call    main
 2:
         jmp     2b

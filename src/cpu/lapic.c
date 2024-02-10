@@ -2,6 +2,7 @@
 #include "x86.h"
 
 #include <mem/mm.h>
+#include <stdio.h>
 
 // Taken from xv6:lapic.c
 
@@ -13,7 +14,7 @@
 #define LAPIC_LDR (0x00E0 >> 2) // Logical Destination
 #define LAPIC_DFR (0x00E0 >> 2) // Destionation Format
 #define LAPIC_SVR (0x00F0 >> 2) // Spurious Interrupt Vector
-#define LAPIC_SW_ENABLE 0x00000100 // Unit Enable
+#define SW_ENABLE 0x00000100 // Unit Enable
 #define LAPIC_ESR (0x0280 >> 2) // Error Status
 #define LAPIC_ICRL (0x0300 >> 2) // Interrupt Command
 #define LAPIC_ICRH (0x0310 >> 2) // Interrupt Command [63:32]
@@ -27,13 +28,12 @@
 #define BUSY 0x00001000
 #define FIXED 0x00000000
 #define LAPIC_TIMER (0x0320 >> 2) // Local Vector Table 0 (TIMER)
-#define TIMER_X1 0x0000000B // divide counts by 1
 #define TIMER_PERIODIC 0x00020000 // Periodic
 #define LAPIC_PCINT (0x0340 >> 2) // Performance Counter LVT
 #define LAPIC_LINT0 (0x0350 >> 2) // Local Vector Table 1 (LINT0)
 #define LAPIC_LINT1 (0x0360 >> 2) // Local Vector Table 2 (LINT1)
 #define LAPIC_ERROR (0x0370 >> 2) // Local Vector Table 3 (ERROR)
-#define LAPIC_DISABLE 0x00010000 // Interrupt masked
+#define DISABLE 0x00010000 // Interrupt masked
 #define LAPIC_TICR (0x0380 >> 2) // Timer Initial Count
 #define LAPIC_TCCR (0x0390 >> 2) // Timer Current Count
 #define LAPIC_TDCR (0x03E0 >> 2) // Timer Divide Configuration
@@ -48,31 +48,35 @@
 
 static uint32_t volatile* lapic;
 
+static uint32_t lapic_read(size_t reg)
+{
+    return lapic[reg];
+}
+
 static void lapic_write(size_t reg, uint32_t val)
 {
     lapic[reg] = val;
     lapic[reg]; // read register to wait for write to finish
 }
 
+// see https://wiki.osdev.org/APIC_Timer#Example_code_in_ASM
 void init_lapic(uintptr_t lapic_addr)
 {
     // FIXME max size as macro
     lapic = map_phy(lapic_addr, 0x400, PTE_W);
 
-    lapic_write(LAPIC_SVR, LAPIC_SW_ENABLE | IRQ_SPUR);
+    lapic_write(LAPIC_SVR, SW_ENABLE | (T_IRQ0 + IRQ_SPUR));
 
-    // see https://wiki.osdev.org/LAPIC_Timer
-    lapic_write(LAPIC_TDCR, TIMER_X1);
-    lapic_write(LAPIC_TIMER, TIMER_PERIODIC | IRQ_TIMER);
-    lapic_write(LAPIC_TICR, 10000000);
+    lapic_write(LAPIC_TIMER, TIMER_PERIODIC | (T_IRQ0 + IRQ_TIMER));
+    lapic_write(LAPIC_TDCR, 0x1);
+    lapic_write(LAPIC_TICR, 100000000);
 
-    lapic_write(LAPIC_LINT0, LAPIC_DISABLE);
-    lapic_write(LAPIC_LINT1, LAPIC_DISABLE);
+    lapic_write(LAPIC_LINT0, DISABLE);
+    lapic_write(LAPIC_LINT1, DISABLE);
+    if (((lapic_read(LAPIC_VER) >> 16) & 0xff) >= 4)
+        lapic_write(LAPIC_PCINT, DISABLE);
 
-    if (((lapic[LAPIC_VER] >> 16) & 0xff) >= 4)
-        lapic_write(LAPIC_PCINT, LAPIC_DISABLE);
-
-    lapic_write(LAPIC_ERROR, IRQ_ERR);
+    lapic_write(LAPIC_ERROR, (T_IRQ0 + IRQ_ERR));
 
     lapic_write(LAPIC_ESR, 0);
     lapic_write(LAPIC_ESR, 0);

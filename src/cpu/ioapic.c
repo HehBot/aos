@@ -49,14 +49,14 @@ void init_ioapic(uintptr_t addr, uint8_t id)
 
     // see https://wiki.osdev.org/IOAPIC
     uint32_t max_intr = ((ioapic_read(IOAPIC_VER) >> 16) & 0xff);
-    for (uint32_t i = 0; i < max_intr; ++i) {
-        ioapic_write(IOAPIC_TABLE + 2 * i, DISABLED | (T_IRQ0 + i));
-        ioapic_write(IOAPIC_TABLE + 2 * i + 1, 0);
+    for (uint32_t irq = 0; irq <= max_intr; ++irq) {
+        ioapic_write(IOAPIC_TABLE + 2 * irq, DISABLED | (T_IRQ0 + irq));
+        ioapic_write(IOAPIC_TABLE + 2 * irq + 1, 0);
     }
 }
 
 void ioapic_enable(uint8_t irq, uint8_t cpu_lapic_id)
 {
-    ioapic_write(IOAPIC_TABLE + 2 * (irq - T_IRQ0), irq);
-    ioapic_write(IOAPIC_TABLE + 2 * (irq - T_IRQ0) + 1, cpu_lapic_id << 24);
+    ioapic_write(IOAPIC_TABLE + 2 * irq, T_IRQ0 + irq);
+    ioapic_write(IOAPIC_TABLE + 2 * irq + 1, cpu_lapic_id << 24);
 }

@@ -32,6 +32,7 @@ isr_stub:
         movw    %ax, %gs
 
         pushl   %esp
+        cld
         call    isr_common
         addl    $0x4, %esp
 
