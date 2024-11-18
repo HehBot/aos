@@ -9,7 +9,7 @@
 
 #define NR_ISRS 256
 static idt_entry_t idt[NR_ISRS] = { 0 };
-extern void (*(isrs[]))(void);
+/*extern*/ void (*(isrs[256]))(void);
 
 static inline void set_idt_entry(size_t n, void (*isr)(void), uint8_t gate_type, uint8_t dpl)
 {
@@ -120,37 +120,37 @@ void excep(cpu_state_t* cpu_state)
     }
     printf("\nRegister states at exception:\n");
 
-    printf("  eax: ..................... 0x%lx\n", cpu_state->eax);
-    printf("  ebx: ..................... 0x%lx\n", cpu_state->ebx);
-    printf("  ecx: ..................... 0x%lx\n", cpu_state->ecx);
-    printf("  edx: ..................... 0x%lx\n", cpu_state->edx);
-    printf("  edi: ..................... 0x%lx\n", cpu_state->edi);
-    printf("  esi: ..................... 0x%lx\n", cpu_state->esi);
-    printf("  ebp: ..................... 0x%lx\n", cpu_state->ebp);
-    printf("  useresp: ................. 0x%lx\n", cpu_state->useresp);
-    printf("  eip: ..................... 0x%lx\n", cpu_state->eip);
+    printf("  eax: ..................... 0x%x\n", cpu_state->eax);
+    printf("  ebx: ..................... 0x%x\n", cpu_state->ebx);
+    printf("  ecx: ..................... 0x%x\n", cpu_state->ecx);
+    printf("  edx: ..................... 0x%x\n", cpu_state->edx);
+    printf("  edi: ..................... 0x%x\n", cpu_state->edi);
+    printf("  esi: ..................... 0x%x\n", cpu_state->esi);
+    printf("  ebp: ..................... 0x%x\n", cpu_state->ebp);
+    printf("  useresp: ................. 0x%x\n", cpu_state->useresp);
+    printf("  eip: ..................... 0x%x\n", cpu_state->eip);
     printf("\n");
     printf("  cs: 0x%x, ds: 0x%x, ss: 0x%x\n", cpu_state->cs, cpu_state->ds, cpu_state->ss);
     printf("  es: 0x%x, fs: 0x%x, gs: 0x%x\n", cpu_state->es, cpu_state->fs, cpu_state->gs);
     printf("\n");
     printf("  Interrupt Number: ........ %u\n", int_no);
     printf("  Error Code: .............. %u\n", err_code);
-    printf("  eflags: .................. 0x%lx\n", cpu_state->eflags);
+    printf("  eflags: .................. 0x%x\n", cpu_state->eflags);
 
     HALT();
 }
 
 void syscall(cpu_state_t* cpu_state)
 {
-    printf("Syscall number %lu\n", cpu_state->eax);
-    if (cpu_state->eax == 0) {
-        char* z = (char*)cpu_state->ebx;
-        for (size_t i = 0; i < cpu_state->ecx; ++i)
-            printf("%c", z[i]);
-    }
+    printf("Syscall number %u\n", cpu_state->eax);
+    // if (cpu_state->eax == 0) {
+    //     char* z = (char*)cpu_state->ebx;
+    //     for (size_t i = 0; i < cpu_state->ecx; ++i)
+    //         printf("%c", z[i]);
+    // }
 }
 
-void __attribute__((cdecl)) isr_common(cpu_state_t* cpu_state)
+void /*__attribute__((cdecl))*/ isr_common(cpu_state_t* cpu_state)
 {
     int int_no = cpu_state->int_no;
     void keyboard_callback(cpu_state_t*);

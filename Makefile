@@ -1,8 +1,8 @@
-ASM := i386-elf-as
-CC := i386-elf-gcc
-LD := i386-elf-ld
+ASM := as
+CC := gcc
+LD := ld
 
-EMU := qemu-system-i386
+EMU := qemu-system-x86_64
 GDB := gdb
 
 NAME := aos
@@ -28,19 +28,19 @@ BOOTCDROM := $(BUILD_DIR)/bootcdrom.iso
 INC_FLAGS = -I$(SRC_DIR)/ -I$(SRC_DIR)/util -I$(SRC_DIR)/util/liballoc
 
 ASMFLAGS := -c -g
-CFLAGS := -c -g -Wall -Wextra -Werror -ffreestanding -nostdlib -MMD -MP $(INC_FLAGS)
+CFLAGS := -c -g -Wall -Wextra -Werror -ffreestanding -nostdlib -mno-red-zone -MMD -MP $(INC_FLAGS)
 LDFLAGS := -T linker.ld
 
 EMU_FLAGS := -smp cpus=4,cores=1,threads=1,sockets=4
 
-run_cdrom: $(BOOTCDROM) $(DISK)
-	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw -drive file=$(DISK),index=1,media=disk,format=raw
+run_cdrom: $(BOOTCDROM)
+	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw
 
 run_disk: $(BOOTDISK)
 	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTDISK),index=0,media=disk,format=raw
 
-debug: $(BOOTCDROM) $(KERNEL) $(DISK)
-	$(EMU) -s -S $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw -drive file=$(DISK),index=1,media=disk,format=raw &
+debug: $(BOOTCDROM) $(KERNEL)
+	$(EMU) -s -S $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw &
 	$(GDB) -ex "target remote tcp::1234" -ex "symbol-file $(KERNEL)"
 
 disk: $(DISK)
@@ -82,7 +82,7 @@ $(BUILD_DIR)/%.c.o: %.c
 
 $(BUILD_DIR)/%.S.o: %.S
 	@mkdir -p $(dir $@)
-	@i386-elf-cpp -MMD -MP $(INC_FLAGS) -o $(BUILD_DIR)/$<.S $<
+	@cpp -MMD -MP $(INC_FLAGS) -o $(BUILD_DIR)/$<.S $<
 	$(ASM) $(ASMFLAGS) -o $@ $(BUILD_DIR)/$<.S
 	@$(RM) $(BUILD_DIR)/$<.S
 

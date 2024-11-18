@@ -1,50 +1,42 @@
 ENTRY(_start)
 
+KERN_BASE = 0xffffffffc0000000;
+
 SECTIONS
 {
     . = 1M;
 
-    load_addr = .;
-
-    .multiboot.data :
+    .boot.rodata :
     {
-        *(.multiboot.data)
+        *(.multiboot2.header)
+        *(.boot.rodata)
     }
-    .multiboot.text :
+    .boot.bss :
     {
-        *(.multiboot.text)
+        *(.boot.bss)
     }
-    . += 0xC0000000;
-    .text ALIGN (4K) : AT (ADDR (.text) - 0xC0000000)
+    .boot.text :
     {
-        kernel_code_start = .;
-        kernel_phy_code_start = . - 0xC0000000;
-        *(.text)
-    }
-    .rodata : AT (ADDR (.rodata) - 0xC0000000)
-    {
-        *(.rodata)
-        kernel_phy_code_end = . - 0xC0000000;
+        *(.boot.text)
     }
 
-    .data ALIGN (4K) : AT (ADDR (.data) - 0xC0000000)
-    {
-        kernel_data_start = .;
-        kernel_phy_data_start = . - 0xC0000000;
-        *(.data)
-    }
+    . += KERN_BASE;
 
-    load_end_addr = . - 0xC0000000;
-
-    .bss : AT (ADDR (.bss) - 0xC0000000)
+    .bss : AT (ADDR (.bss) - KERN_BASE)
     {
         *(COMMON)
         *(.bss)
-        kernel_phy_data_end = . - 0xC0000000;
     }
-
-    bss_end_addr = . - 0xC0000000;
-
-    . = ALIGN(4K);
-    kernel_heap_start = .;
+    .text ALIGN (4K) : AT (ADDR (.text) - KERN_BASE)
+    {
+        *(.text)
+    }
+    .rodata : AT (ADDR (.rodata) - KERN_BASE)
+    {
+        *(.rodata)
+    }
+    .data ALIGN (4K) : AT (ADDR (.data) - KERN_BASE)
+    {
+        *(.data)
+    }
 }

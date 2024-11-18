@@ -20,7 +20,7 @@
 
 size_t block_size;
 
-extern mem_map_t kernel_mem_map[];
+// extern mem_map_t kernel_mem_map[];
 
 #define MAX_MODS 10
 static mem_map_t mod_mem_map[MAX_MODS];
@@ -71,37 +71,35 @@ void parse_mboot_info(uintptr_t __mboot_info)
     }
 }
 
-static void map_modules()
-{
-    for (size_t i = 0; i < nr_mods; ++i) {
-        uintptr_t pa = mod_mem_map[i].phy_start;
-        size_t nr_pages = PG_ROUND_UP(mod_mem_map[i].phy_end - pa) / PAGE_SIZE;
-        size_t len = mod_mem_map[i].phy_end - pa;
-        uintptr_t va = (uintptr_t)map_phy(pa, len, PTE_W);
-        mod_mem_map[i].virt = va;
-        mod_mem_map[i].nr_pages = nr_pages;
-        mod_mem_map[i].mapped = 1;
-    }
-}
+// static void map_modules()
+// {
+//     for (size_t i = 0; i < nr_mods; ++i) {
+//         uintptr_t pa = mod_mem_map[i].phy_start;
+//         size_t nr_pages = PG_ROUND_UP(mod_mem_map[i].phy_end - pa) / PAGE_SIZE;
+//         size_t len = mod_mem_map[i].phy_end - pa;
+//         uintptr_t va = (uintptr_t)map_phy(pa, len, PTE_W);
+//         mod_mem_map[i].virt = va;
+//         mod_mem_map[i].nr_pages = nr_pages;
+//         mod_mem_map[i].mapped = 1;
+//     }
+// }
 
-void __attribute__((cdecl)) main(uint32_t mboot_magic, uintptr_t __mboot_info)
+void /*__attribute__((cdecl))*/ main(uintptr_t __mboot_info)
 {
-    if (mboot_magic != MULTIBOOT2_BOOTLOADER_MAGIC)
-        return;
     parse_mboot_info(__mboot_info);
 
     // TODO reclaim MULTIBOOT_MEMORY_ACPI_RECLAIMABLE entries
     init_pmm(mmap_info);
-    for (size_t i = 0; kernel_mem_map[i].present; ++i)
-        if (kernel_mem_map[i].mapped)
-            for (uintptr_t phy = kernel_mem_map[i].phy_start; phy < kernel_mem_map[i].phy_end; phy += PAGE_SIZE)
-                pmm_reserve_frame(phy);
+    // for (size_t i = 0; kernel_mem_map[i].present; ++i)
+    //     if (kernel_mem_map[i].mapped)
+    //         for (uintptr_t phy = kernel_mem_map[i].phy_start; phy < kernel_mem_map[i].phy_end; phy += PAGE_SIZE)
+    //             pmm_reserve_frame(phy);
     for (size_t i = 0; i < nr_mods; ++i)
         for (uintptr_t phy = mod_mem_map[i].phy_start; phy < mod_mem_map[i].phy_end; phy += PAGE_SIZE)
             pmm_reserve_frame(phy);
 
     init_mm();
-    map_modules(mod_mem_map, nr_mods);
+    // map_modules(mod_mem_map, nr_mods);
 
     init_screen(fb_info);
 

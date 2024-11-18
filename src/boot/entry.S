@@ -2,107 +2,223 @@
 #define ASM_FILE
 #include <multiboot2.h>
 
-.section .multiboot.data, "ax"
-.extern load_addr
-.extern load_end_addr
-.extern bss_end_addr
+.globl _start
+.extern KERN_BASE
+
+.section .multiboot2.header, "ax"
 .align 16
 multiboot_header:
-.long MULTIBOOT2_HEADER_MAGIC
-.long MULTIBOOT_ARCHITECTURE_I386
-.long (multiboot_header_end - multiboot_header)
-.long (-(MULTIBOOT2_HEADER_MAGIC + MULTIBOOT_ARCHITECTURE_I386 + (multiboot_header_end - multiboot_header)))
+.4byte MULTIBOOT2_HEADER_MAGIC
+.4byte MULTIBOOT_ARCHITECTURE_I386
+.4byte (multiboot_header_end - multiboot_header)
+.4byte (-(MULTIBOOT2_HEADER_MAGIC + MULTIBOOT_ARCHITECTURE_I386 + (multiboot_header_end - multiboot_header)))
 
 .align 8
-address_tag_start:
-.short MULTIBOOT_HEADER_TAG_ADDRESS
-.short MULTIBOOT_HEADER_TAG_OPTIONAL
-.long address_tag_end-address_tag_start
-.long multiboot_header
-.long load_addr
-.long load_end_addr
-.long bss_end_addr
-address_tag_end:
-
-.align 8
-entry_address_tag_start:
-.short MULTIBOOT_HEADER_TAG_ENTRY_ADDRESS
-.short MULTIBOOT_HEADER_TAG_OPTIONAL
-.long entry_address_tag_end-entry_address_tag_start
-.long _start
-entry_address_tag_end:
-
-.align 8
-.short MULTIBOOT_HEADER_TAG_END
-.short 0
-.long 8
+.2byte MULTIBOOT_HEADER_TAG_END
+.2byte 0
+.4byte 8
 multiboot_header_end:
 
-.section .bss
-.align 16
-stack_top:
+.section .boot.bss
+// temporary paging hierarchy
+.align 4096
+p4_table:
 .skip 0x1000
-stack_bot:
+p3_table:
+.skip 0x1000
+p2_table:
+.skip 0x1000
+// temporary stack
+stack_bottom:
+.skip 64
+stack_top:
 
-.section .multiboot.text, "ax"
-.globl _start
-.extern entry_pgdir
+.section .boot.rodata
+// temporary gdt
+gdt64:
+NULL_SEG = 0
+.8byte 0
+CODE_SEG = . - gdt64
+.8byte (1 << 43 | 1 << 44 | 1 << 47 | 1 << 53)
+gdt64_ptr:
+.2byte . - gdt64 - 1
+.8byte gdt64
+kern_base:
+.8byte KERN_BASE
+
+.section .boot.text, "ax"
+.code32
 _start:
-        cli
+        mov $stack_top, %esp
+        mov %ebx, %edi
 
-        // store mboot header
-        movl    $mboot_magic, %ecx
-        movl    %eax, -KERN_BASE(%ecx)
-        movl    $__mboot_info, %edx
-        leal    -KERN_BASE(%edx), %edi
-        movl    %ebx, %esi
-        movl    (%ebx), %ecx
-        rep     movsb
+        call check_multiboot2
+        call check_cpuid
+        call check_long_mode
 
-        // enable paging
-        movl    $entry_pgdir, %eax
-        subl    $KERN_BASE, %eax
-        movl    %eax, %cr3
-        movl    %cr4, %ebx
-        orl     $CR4_PSE, %ebx
-        movl    %ebx, %cr4
-        movl    %cr0, %ebx
-        orl     $(CR0_WP | CR0_PG), %ebx
-        movl    %ebx, %cr0
+        call set_up_page_tables
+        call enable_paging
 
-        jmp     start
-_end:
+        mov $gdt64_ptr, %eax
+        lgdt (%eax)
 
-.section .text
-mboot_magic:
-.long 0
-.align 8
-__mboot_info:
-.fill 500, 1, 0
-
-.extern entry_gdt_desc
-.extern isr_install
-.extern main
-start:
-        // load GDT
-        lgdt    entry_gdt_desc
-        // fix segments
-        ljmp    $KERNEL_CODE_SEG, $1f
+        ljmp $CODE_SEG,$1f
+.code64
 1:
-        movw    $KERNEL_DATA_SEG, %ax
-        movw    %ax, %ds
-        movw    %ax, %es
-        movw    %ax, %fs
-        movw    %ax, %gs
-        // set up stack
-        movl    $stack_bot, %ebp
-        movw    %ax, %ss
-        movl    %ebp, %esp
+        movabs $0x2f592f412f4b2f4f, %rax
+        mov %rax, 0xb8000
 
-        pushl   $__mboot_info
-        movl    (mboot_magic), %eax
-        pushl   %eax
-        cld
-        call    main
-2:
-        jmp     2b
+        hlt
+
+
+.code32
+/*
+ * Check that %eax contains multiboot22 magic number
+ */
+check_multiboot2:
+        cmp $MULTIBOOT2_BOOTLOADER_MAGIC, %eax
+        jne 1f
+        ret
+1:
+        mov $'0, %al
+        jmp error
+
+
+/*
+ * Check if cpuid is supported by attempting to flip the id bit (bit 21) of %flags
+ */
+check_cpuid:
+        // copy %flags into %eax (and %ecx) via stack
+        pushf
+        pop %eax
+        mov %ecx, %eax
+
+        // flip the id bit
+        xor $(1 << 21), %eax
+
+        // Copy eax to %flags via the stack
+        push %eax
+        popf
+
+        // Copy %flags back to eax (with the flipped bit if CPUID is supported)
+        pushf
+        pop %eax
+
+        // Restore %flags from the old version stored in %ecx (i.e. flipping the
+        // ID bit back if it was ever flipped).
+        push %ecx
+        popf
+
+        // Compare eax and %ecx. If they are equal then that means the bit
+        // wasn't flipped, and CPUID isn't supported.
+        cmp %eax, %ecx
+        je 1f
+        ret
+1:
+        mov $'1, %al
+        jmp error
+
+
+/*
+ * Check if long mode is available
+ */
+check_long_mode:
+        // test if extended processor info in available
+        mov $0x80000000, %eax   // implicit argument for cpuid
+        cpuid                   // get highest supported argument
+        cmp $0x80000001, %eax   // it needs to be at least 0x80000001
+        jb 1f                   // if it's less, the CPU is too old for long mode
+
+        // use extended info to test if long mode is available
+        mov 0x80000001, %eax    // argument for extended processor info
+        cpuid                   // returns various feature bits in %ecx and %edx
+        test $(1 << 29), %edx   // test if the LM-bit is set in the D-register
+        jz 1f                   // If it's not set, there is no long mode
+        ret
+1:
+        mov $'2, %al
+        jmp error
+
+
+/*
+ * sets up following mappings
+ * 0x0 -> 64MiB                         to 0x0 -> 64MiB (identity mapping)
+ * KERN_BASE -> KERN_BASE+64MiB         to 0x0 -> 64MiB (proper mapping)
+ */
+set_up_page_tables:
+        // get offsets needed for proper mapping of KERN_BASE
+        //      %ecx contains p4_index
+        //      %ebx contains p3_index
+        mov kern_base, %ebx
+        mov kern_base+4, %ecx
+        and $0xffff, %ecx
+        shl $2, %ecx
+        shr $30, %ebx
+        or %ecx, %ebx
+        mov %ebx, %ecx
+        and $0x1ff, %ebx
+        shr $9, %ecx
+
+        mov $p3_table, %eax
+        or $0b11, %eax
+        // identity
+        mov %eax, p4_table
+        // proper
+        mov %eax, p4_table(,%ecx,8)
+
+        mov $p2_table, %eax
+        or $0b11, %eax
+        // identity
+        mov %eax, p3_table
+        // proper
+        mov %eax, p3_table(,%ebx,8)
+
+        // map each p2 entry to a huge 2MiB page
+        mov $0, %ecx
+1:
+        mov $0x200000, %eax
+        mul %ecx
+        or $(PTE_HP | PTE_W | PTE_P), %eax
+        mov %eax, p2_table(,%ecx,8)
+
+        inc %ecx
+        cmp $32, %ecx
+        jne 1b
+
+        ret
+
+
+enable_paging:
+        // load p4_table to cr3
+        mov $p4_table, %eax
+        mov %eax, %cr3
+
+        // enable PAE (Physical Address Extension) in cr4
+        mov %cr4, %eax
+        or $(CR4_PAE), %eax
+        mov %eax, %cr4
+
+        // set long mode bit in EFER MSR
+        mov $0xc0000080, %ecx
+        rdmsr
+        or $(1<<8), %eax
+        wrmsr
+
+        // enable paging and WP (Write Protect) in cr0
+        mov %cr0, %eax
+        or $(CR0_PG | CR0_WP), %eax
+        mov %eax, %cr0
+
+        ret
+
+
+/*
+ * prints `ERR: ` and error code in %al to screen and halts
+ */
+error:
+        movl $0x4f524f45, 0xb8000
+        movl $0x4f3a4f52, 0xb8004
+        movl $0x4f20, 0xb8008
+        mov %al, 0xb8010
+        movb $0x4f, 0xb8011
+        hlt

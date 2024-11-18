@@ -8,8 +8,6 @@
     #include <stdio.h>
 #endif // __ASSEMBLER__
 
-#define KERN_BASE 0xc0000000
-
 // General
 #ifndef __ASSEMBLER__
 static inline _Noreturn void HALT()
@@ -23,14 +21,14 @@ static inline _Noreturn void HALT()
             HALT();                                                      \
         } while (0)
 
-// EFLAGS
-static inline uint32_t get_eflags(void)
-{
-    uint32_t eflags;
-    asm volatile("pushfl; popl %0"
-                 : "=r"(eflags));
-    return eflags;
-}
+    // EFLAGS
+    // static inline uint32_t get_eflags(void)
+    // {
+    //     uint32_t eflags;
+    //     asm volatile("pushfl; popl %0"
+    //                  : "=r"(eflags));
+    //     return eflags;
+    // }
     #define EFLAGS_INT 0x00000200
 
 // IDT
@@ -192,7 +190,7 @@ static inline void ltr(uint16_t tss_seg)
 #define TSS_SEG (TSS_GDT_INDEX * GDT_STRIDE)
 
 // Memory and Paging
-#define CR4_PSE 0x10
+#define CR4_PAE 0x20
 #define CR0_WP 0x10000
 #define CR0_PG 0x80000000
 
@@ -220,13 +218,13 @@ static inline void invlpg(uintptr_t va)
 }
 static inline void lcr3(uintptr_t pgdir_pa)
 {
-    asm("movl %0, %%cr3" ::"r"(pgdir_pa)
+    asm("movq %0, %%cr3" ::"r"(pgdir_pa)
         : "memory");
 }
 static inline uintptr_t rcr2(void)
 {
-    uintptr_t pa;
-    asm("movl %%cr2, %0"
+    uintptr_t pa = 0;
+    asm("movq %%cr2, %0"
         : "=r"(pa)
         :);
     return pa;

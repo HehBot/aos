@@ -8,8 +8,8 @@ size_t nr_cpus = 0;
 
 cpu_t* get_cpu(void)
 {
-    if (get_eflags() & EFLAGS_INT)
-        PANIC(__FILE__);
+    // if (get_eflags() & EFLAGS_INT)
+    //     PANIC(__FILE__);
 
     uint8_t lapic_id(void);
     uint8_t id = lapic_id();

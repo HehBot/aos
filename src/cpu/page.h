@@ -17,11 +17,11 @@
 #define PTE_P 0x001
 #define PTE_W 0x002
 #define PTE_U 0x004
-#define PDE_LP 0x080
-#define PTE_FRAME(x) ((x)&0xfffff000)
-#define PTE_FLAGS(x) ((x)&0xfff)
+#define PTE_HP 0x080
+#define PTE_FRAME(x) ((x) & 0xfffff000)
+#define PTE_FLAGS(x) ((x) & 0xfff)
 
-#define PA_FRAME(x) ((x)&0xfffff000)
-#define PA_OFF(x) ((x)&0xfff)
+#define PA_FRAME(x) ((x) & 0xfffff000)
+#define PA_OFF(x) ((x) & 0xfff)
 
 #endif // PAGE_H

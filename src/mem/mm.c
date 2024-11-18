@@ -36,61 +36,61 @@ void switch_page_directory(size_t d)
 
 void init_mm(void)
 {
-    static page_directory_t kernel_pgdir __attribute__((__aligned__(PAGE_SIZE)));
-    extern pde_t entry_pgdir[];
-    extern mem_map_t kernel_mem_map[];
+    // static page_directory_t kernel_pgdir __attribute__((__aligned__(PAGE_SIZE)));
+    // extern pde_t entry_pgdir[];
+    // extern mem_map_t kernel_mem_map[];
 
-    memset(&kernel_pgdir, 0, sizeof(kernel_pgdir));
-    uintptr_t kernel_pgdir_physical_addr = ((uintptr_t)&kernel_pgdir.tables_physical[0] - KERN_BASE);
+    // memset(&kernel_pgdir, 0, sizeof(kernel_pgdir));
+    // uintptr_t kernel_pgdir_physical_addr = ((uintptr_t)&kernel_pgdir.tables_physical[0] - KERN_BASE);
 
-    // 1. set up meta page table in current pgdir and kernel pgdir
-    uintptr_t pgtb_phy = pmm_get_frame();
-    entry_pgdir[0x3ff] = LPG_ROUND_DOWN(pgtb_phy) | PDE_LP | PTE_W | PTE_P;
-    page_table_t* pgtb = (void*)(0xffc00000 + (pgtb_phy - LPG_ROUND_DOWN(pgtb_phy)));
-    memset(pgtb->pages, 0, sizeof(pgtb->pages));
-    pgtb->pages[0] = pgtb_phy | PTE_W | PTE_P;
-    entry_pgdir[0x3ff] = pgtb_phy | PTE_W | PTE_P;
-    pgtb = (void*)0xffc00000;
+    // // 1. set up meta page table in current pgdir and kernel pgdir
+    // uintptr_t pgtb_phy = pmm_get_frame();
+    // entry_pgdir[0x3ff] = LPG_ROUND_DOWN(pgtb_phy) | PDE_LP | PTE_W | PTE_P;
+    // page_table_t* pgtb = (void*)(0xffc00000 + (pgtb_phy - LPG_ROUND_DOWN(pgtb_phy)));
+    // memset(pgtb->pages, 0, sizeof(pgtb->pages));
+    // pgtb->pages[0] = pgtb_phy | PTE_W | PTE_P;
+    // entry_pgdir[0x3ff] = pgtb_phy | PTE_W | PTE_P;
+    // pgtb = (void*)0xffc00000;
 
-    // 2. map kernel mappings
-    for (size_t i = 0; kernel_mem_map[i].present; ++i) {
-        uint8_t perms = kernel_mem_map[i].perms | PTE_P;
-        if (kernel_mem_map[i].mapped) {
-            for (uintptr_t virt = kernel_mem_map[i].virt, phy = kernel_mem_map[i].phy_start; phy < kernel_mem_map[i].phy_end; virt += PAGE_SIZE, phy += PAGE_SIZE)
-                pgtb->pages[PTX(virt)] = PA_FRAME(phy) | perms;
-        } else {
-            uintptr_t ul = kernel_mem_map[i].virt + kernel_mem_map[i].nr_pages * PAGE_SIZE;
-            for (uintptr_t virt = kernel_mem_map[i].virt; virt < ul; virt += PAGE_SIZE)
-                pgtb->pages[PTX(virt)] = PA_FRAME(pmm_get_frame()) | perms;
-        }
-    }
+    // // 2. map kernel mappings
+    // for (size_t i = 0; kernel_mem_map[i].present; ++i) {
+    //     uint8_t perms = kernel_mem_map[i].perms | PTE_P;
+    //     if (kernel_mem_map[i].mapped) {
+    //         for (uintptr_t virt = kernel_mem_map[i].virt, phy = kernel_mem_map[i].phy_start; phy < kernel_mem_map[i].phy_end; virt += PAGE_SIZE, phy += PAGE_SIZE)
+    //             pgtb->pages[PTX(virt)] = PA_FRAME(phy) | perms;
+    //     } else {
+    //         uintptr_t ul = kernel_mem_map[i].virt + kernel_mem_map[i].nr_pages * PAGE_SIZE;
+    //         for (uintptr_t virt = kernel_mem_map[i].virt; virt < ul; virt += PAGE_SIZE)
+    //             pgtb->pages[PTX(virt)] = PA_FRAME(pmm_get_frame()) | perms;
+    //     }
+    // }
 
-    uintptr_t entry_pgdir_frame = PTE_FRAME(pgtb->pages[PTX((uintptr_t)entry_pgdir)]);
-    pgtb->pages[PTX((uintptr_t)entry_pgdir)] = pgtb_phy | PTE_W | PTE_P;
+    // uintptr_t entry_pgdir_frame = PTE_FRAME(pgtb->pages[PTX((uintptr_t)entry_pgdir)]);
+    // pgtb->pages[PTX((uintptr_t)entry_pgdir)] = pgtb_phy | PTE_W | PTE_P;
 
-    // 3. add meta page table in kernel mapping
-    // mapping to same virtual address as entry_pgdir
-    size_t pdx = PDX(kernel_mem_map[0].virt);
-    kernel_pgdir.tables[pdx] = (void*)entry_pgdir;
-    kernel_pgdir.tables_physical[pdx] = pgtb_phy | PTE_W | PTE_P | PTE_U;
-    pgtb->pages[0] = 0;
-    pgtb = (void*)entry_pgdir;
+    // // 3. add meta page table in kernel mapping
+    // // mapping to same virtual address as entry_pgdir
+    // size_t pdx = PDX(kernel_mem_map[0].virt);
+    // kernel_pgdir.tables[pdx] = (void*)entry_pgdir;
+    // kernel_pgdir.tables_physical[pdx] = pgtb_phy | PTE_W | PTE_P | PTE_U;
+    // pgtb->pages[0] = 0;
+    // pgtb = (void*)entry_pgdir;
 
-    // 4. switch to kpgdir and free entry_pgdir frame
-    lcr3(kernel_pgdir_physical_addr);
-    current_dir = &kernel_pgdir;
-    pmm_free_frame(entry_pgdir_frame);
+    // // 4. switch to kpgdir and free entry_pgdir frame
+    // lcr3(kernel_pgdir_physical_addr);
+    // current_dir = &kernel_pgdir;
+    // pmm_free_frame(entry_pgdir_frame);
 
-    // 5. initialise kernel heap
-    init_kpalloc();
+    // // 5. initialise kernel heap
+    // init_kpalloc();
 
-    // 6. set up directory list
-    pgdir_list_size = INIT_PGDIRS_SIZE;
-    pgdir_list = kmalloc(INIT_PGDIRS_SIZE * (sizeof(pgdir_list[0])));
-    pgdir_phy_addr_list = kmalloc(INIT_PGDIRS_SIZE * (sizeof(pgdir_phy_addr_list[0])));
-    memset(pgdir_list, 0, INIT_PGDIRS_SIZE * (sizeof(pgdir_list[0])));
-    pgdir_list[0] = current_dir = &kernel_pgdir;
-    pgdir_phy_addr_list[0] = kernel_pgdir_physical_addr;
+    // // 6. set up directory list
+    // pgdir_list_size = INIT_PGDIRS_SIZE;
+    // pgdir_list = kmalloc(INIT_PGDIRS_SIZE * (sizeof(pgdir_list[0])));
+    // pgdir_phy_addr_list = kmalloc(INIT_PGDIRS_SIZE * (sizeof(pgdir_phy_addr_list[0])));
+    // memset(pgdir_list, 0, INIT_PGDIRS_SIZE * (sizeof(pgdir_list[0])));
+    // pgdir_list[0] = current_dir = &kernel_pgdir;
+    // pgdir_phy_addr_list[0] = kernel_pgdir_physical_addr;
 }
 
 static inline pte_t* get_pte(page_directory_t* d, uintptr_t va, int make)
@@ -125,16 +125,16 @@ void map(uintptr_t phy, void* virt, size_t len, uint8_t flags)
     }
 
     // kernel mappings have to be updated in all page dirs
-    if (v >= KERN_BASE) {
-        for (size_t i = 0; i < pgdir_list_size; ++i) {
-            if (pgdir_list[i] == current_dir || pgdir_list[i] == NULL)
-                continue;
-            for (uintptr_t va = v, pa = PA_FRAME(phy); va < v + len; va += PAGE_SIZE, pa += PAGE_SIZE) {
-                pte_t* pte = get_pte(current_dir, va, 1);
-                *pte = pa | flags | PTE_P;
-            }
-        }
-    }
+    // if (v >= KERN_BASE) {
+    //     for (size_t i = 0; i < pgdir_list_size; ++i) {
+    //         if (pgdir_list[i] == current_dir || pgdir_list[i] == NULL)
+    //             continue;
+    //         for (uintptr_t va = v, pa = PA_FRAME(phy); va < v + len; va += PAGE_SIZE, pa += PAGE_SIZE) {
+    //             pte_t* pte = get_pte(current_dir, va, 1);
+    //             *pte = pa | flags | PTE_P;
+    //         }
+    //     }
+    // }
 }
 
 // remap given virt addr range to given phy addr range with given flags
@@ -201,16 +201,16 @@ void unmap(void* virt, size_t len)
     }
 
     // kernel mappings have to be updated in all page dirs
-    if (v >= KERN_BASE) {
-        for (size_t i = 0; i < pgdir_list_size; ++i) {
-            if (pgdir_list[i] == current_dir || pgdir_list[i] == NULL)
-                continue;
-            for (uintptr_t va = v; va < v + len; va += PAGE_SIZE) {
-                pte = get_pte(pgdir_list[i], va, 1);
-                *pte = 0;
-            }
-        }
-    }
+    // if (v >= KERN_BASE) {
+    //     for (size_t i = 0; i < pgdir_list_size; ++i) {
+    //         if (pgdir_list[i] == current_dir || pgdir_list[i] == NULL)
+    //             continue;
+    //         for (uintptr_t va = v; va < v + len; va += PAGE_SIZE) {
+    //             pte = get_pte(pgdir_list[i], va, 1);
+    //             *pte = 0;
+    //         }
+    //     }
+    // }
 }
 
 // FIXME reduce excess virtual memory usage due to close-by PAs getting different pages
@@ -239,10 +239,10 @@ size_t alloc_page_directory(void)
 {
     page_directory_t* p = kpalloc(PG_ROUND_UP(sizeof(*p)) / PAGE_SIZE);
     memset(p, 0, sizeof(*p));
-    for (size_t i = PDX(KERN_BASE); i < 1024; ++i) {
-        p->tables[i] = current_dir->tables[i];
-        p->tables_physical[i] = current_dir->tables_physical[i];
-    }
+    // for (size_t i = PDX(KERN_BASE); i < 1024; ++i) {
+    //     p->tables[i] = current_dir->tables[i];
+    //     p->tables_physical[i] = current_dir->tables_physical[i];
+    // }
 
     size_t d = 0;
     for (; d < pgdir_list_size; ++d)
@@ -267,21 +267,21 @@ void free_page_directory(size_t d)
     if (d >= pgdir_list_size)
         PANIC("Bad pgdir index to free");
 
-    page_directory_t* p = pgdir_list[d];
+    // page_directory_t* p = pgdir_list[d];
 
-    for (size_t i = 0; i < PDX(KERN_BASE); ++i) {
-        if (p->tables_physical[i] & PTE_P) {
-            if (p->tables_physical[i] & PDE_LP)
-                pmm_free_large_frame(p->tables_physical[i] & 0xffc00000);
-            else {
-                for (size_t j = 0; j < 1024; ++j) {
-                    if (p->tables[i]->pages[j] & PTE_P)
-                        pmm_free_frame(PTE_FRAME(p->tables[i]->pages[j]));
-                }
-                kpfree(p->tables[i]);
-            }
-            p->tables[i] = NULL;
-            p->tables_physical[i] = 0;
-        }
-    }
+    // for (size_t i = 0; i < PDX(KERN_BASE); ++i) {
+    //     if (p->tables_physical[i] & PTE_P) {
+    //         if (p->tables_physical[i] & PDE_LP)
+    //             pmm_free_large_frame(p->tables_physical[i] & 0xffc00000);
+    //         else {
+    //             for (size_t j = 0; j < 1024; ++j) {
+    //                 if (p->tables[i]->pages[j] & PTE_P)
+    //                     pmm_free_frame(PTE_FRAME(p->tables[i]->pages[j]));
+    //             }
+    //             kpfree(p->tables[i]);
+    //         }
+    //         p->tables[i] = NULL;
+    //         p->tables_physical[i] = 0;
+    //     }
+    // }
 }
