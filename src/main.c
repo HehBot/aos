@@ -98,57 +98,54 @@ typedef struct elf_section_header {
     uint64_t entsize; // Entry size
 } const* elf_section_header_t;
 
-static gdt_entry_t gdt[] = {
-    { 0 },
-    [KERNEL_CODE_GDT_INDEX] = SEG(KERNEL_PL, 1, 0),
-};
-
-void main(phys_addr_t phys_addr_mboot_info)
+uint8_t init_gdt()
 {
-    struct multiboot_info mboot_info = parse_mboot_info(kernel_static_from_phys_addr(phys_addr_mboot_info));
+    static uint8_t excep_stack[PAGE_SIZE] __attribute__((__aligned__(16)));
 
-    init_screen(mboot_info.tag_framebuffer, 0);
-    printf("Hello from C!\n");
+    uint8_t double_fault_ist_index = 1;
+    static tss_t tss = { 0 };
+    tss.ist[double_fault_ist_index] = (uint64_t)&excep_stack[PAGE_SIZE];
+    tss.iomap_base = sizeof(tss_t);
+
+    static gdt_entry_t gdt[NR_GDT_ENTRIES] = {
+        [KERNEL_CODE_GDT_INDEX] = SEG(KERNEL_PL, 1, 0),
+    };
+
+    gdt[TSS1_GDT_INDEX] = SEG_TSS1(KERNEL_PL, (uintptr_t)&tss);
+    gdt[TSS2_GDT_INDEX] = SEG_TSS2(KERNEL_PL, (uintptr_t)&tss);
 
     lgdt(&gdt[0], sizeof(gdt), KERNEL_CODE_SEG);
-    init_idt(KERNEL_CODE_SEG);
+    ltr(TSS_SEG);
 
-    asm volatile("int3");
+    return double_fault_ist_index;
+}
 
-    struct multiboot_tag_elf_sections const* e = mboot_info.tag_elf_sections;
+typedef struct {
+    char const* name;
+    pte_flags_t flags;
+    elf_section_header_t section;
+} section_info_t;
+
+static void get_section_info(struct multiboot_tag_elf_sections const* e, section_info_t* requested_section_info, size_t nr_sections)
+{
     elf_section_header_t shstrtab = (void*)&e->sections[e->shndx * e->entsize];
     char const* strings = (void*)shstrtab->addr;
-    printf("%d sections in kernel ELF\n", e->num);
-
-    // we want sections .text, .rodata, .data, .bss
-    struct {
-        char const* name;
-        pte_flags_t flags;
-        elf_section_header_t section;
-    } section_info[4] = {
-        { ".text", PTE_NX, NULL },
-        { ".rodata", 0, NULL },
-        { ".data", PTE_W, NULL },
-        { ".bss", PTE_W, NULL },
-    };
-    size_t nr_sections = sizeof(section_info) / sizeof(section_info[0]);
-
     for (size_t i = 0; i < e->num; ++i) {
         elf_section_header_t section = (void const*)&e->sections[i * e->entsize];
-        if (section->flags & SHF_ALLOC) {
-            char const* name = &strings[section->name];
-            printf("<%lu> %s: Addr=0x%lx, Size=0x%lx, Flags=%lu\n",
-                   i, name, section->addr, section->size, section->flags);
-            for (size_t i = 0; i < nr_sections; ++i)
-                if (!memcmp(section_info[i].name, name, strlen(section_info[i].name)))
-                    section_info[i].section = section;
+        if ((section->flags & SHF_ALLOC) == 0)
+            continue;
+        char const* name = &strings[section->name];
+        for (size_t i = 0; i < nr_sections; ++i) {
+            if (!memcmp(requested_section_info[i].name, name, strlen(requested_section_info[i].name))) {
+                requested_section_info[i].section = section;
+                break;
+            }
         }
     }
-    if (section_info[0].section == NULL)
-        PANIC("No text section");
+}
 
-    init_pmm(mboot_info.tag_mmap);
-    // reserve kernel frames
+static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sections)
+{
     for (size_t i = 0; i < nr_sections; ++i) {
         elf_section_header_t section = section_info[i].section;
         if (section != NULL) {
@@ -158,7 +155,44 @@ void main(phys_addr_t phys_addr_mboot_info)
                 pmm_reserve_frame(p);
         }
     }
-    // reserve multiboot info frames
+}
+
+void main(phys_addr_t phys_addr_mboot_info)
+{
+    struct multiboot_info mboot_info = parse_mboot_info(kernel_static_from_phys_addr(phys_addr_mboot_info));
+
+    init_screen(mboot_info.tag_framebuffer, 0);
+    printf("Hello from C!\n");
+
+    /*
+     * set up gdt and idt
+     */
+    uint8_t ist_index = init_gdt();
+    init_idt(ist_index);
+
+    asm volatile("int3");
+    asm volatile("int $0x8");
+
+    /*
+     * get section info from multiboot
+     * we want sections .text, .rodata, .data, .bss
+     */
+    section_info_t section_info[4] = {
+        { ".text", PTE_NX, NULL },
+        { ".rodata", 0, NULL },
+        { ".data", PTE_W, NULL },
+        { ".bss", PTE_W, NULL },
+    };
+    size_t nr_sections = sizeof(section_info) / sizeof(section_info[0]);
+    get_section_info(mboot_info.tag_elf_sections, section_info, nr_sections);
+    if (section_info[0].section == NULL)
+        PANIC("No text section");
+
+    init_pmm(mboot_info.tag_mmap);
+    reserve_kernel_frames(section_info, nr_sections);
+    /*
+     * reserve multiboot info frames
+     */
     for (phys_addr_t p = PG_ROUND_DOWN(phys_addr_mboot_info); p <= PG_ROUND_DOWN(phys_addr_mboot_info + mboot_info.size_reserved); p += PAGE_SIZE)
         pmm_reserve_frame(p);
 
@@ -174,11 +208,6 @@ void main(phys_addr_t phys_addr_mboot_info)
     // init_ioapic(acpi_info.ioapic_addr, acpi_info.ioapic_id);
 
     // ioapic_enable(IRQ_KBD, get_cpu()->lapic_id);
-
-    // printf("still alive\n");
-
-    int* x = (int*)0x7fffffffffff;
-    // *x = 5;
 
     printf("Haven't crashed\n");
 

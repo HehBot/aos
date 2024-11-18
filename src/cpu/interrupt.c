@@ -11,13 +11,13 @@
 static idt_entry_t idt[NR_ISRS] = { 0 };
 extern void (*(isrs[256]))(void);
 
-// TODO TSS for separate stack for interrupt handlers
-static inline void set_idt_entry(size_t n, void (*isr)(void), uint8_t gate_type, uint8_t dpl, uint16_t kernel_cs)
+static inline void set_idt_entry(size_t n, void (*isr)(void), uint8_t gate_type, uint8_t dpl, uint8_t ist_index)
 {
     uintptr_t addr = (uintptr_t)isr;
     idt[n] = (idt_entry_t) {
         .low_offset = (addr & 0xffff),
-        .seg = kernel_cs,
+        .ist = ist_index,
+        .seg = KERNEL_CODE_SEG,
         .gate_type = gate_type,
         .dpl = dpl,
         .present = 1,
@@ -26,11 +26,12 @@ static inline void set_idt_entry(size_t n, void (*isr)(void), uint8_t gate_type,
     };
 }
 
-void init_idt(uint16_t kernel_cs)
+void init_idt(uint8_t double_fault_ist_index)
 {
     for (size_t i = 0; i < NR_ISRS; ++i)
-        set_idt_entry(i, isrs[i], GATE_TYPE_INT, KERNEL_PL, kernel_cs);
-    set_idt_entry(T_SYSCALL, isrs[T_SYSCALL], GATE_TYPE_TRAP, USER_PL, kernel_cs);
+        set_idt_entry(i, isrs[i], GATE_TYPE_INT, KERNEL_PL, 0);
+    set_idt_entry(T_SYSCALL, isrs[T_SYSCALL], GATE_TYPE_TRAP, USER_PL, 0);
+    set_idt_entry(T_DOUBLE_FAULT, isrs[T_DOUBLE_FAULT], GATE_TYPE_TRAP, KERNEL_PL, double_fault_ist_index);
     lidt(&idt[0], sizeof(idt));
 }
 

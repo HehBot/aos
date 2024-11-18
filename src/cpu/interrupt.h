@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-void init_idt(uint16_t kernel_cs);
+void init_idt(uint8_t ist_index);
 
 #endif // INTERRUPT_H
