@@ -1,6 +1,8 @@
 #include <drivers/screen.h>
 #include <stdarg.h>
 
+typedef long long int ssize_t;
+
 typedef enum printf_state {
     PRINTF_STATE_NORMAL,
     PRINTF_STATE_LENGTH,
@@ -12,63 +14,68 @@ typedef enum printf_length {
     PRINTF_LENGTH_SHORT,
     PRINTF_LENGTH_DEFAULT,
     PRINTF_LENGTH_LONG,
+    PRINTF_LENGTH_LONG_LONG,
 } printf_length_t;
 
-static char const l[] = "0123456789ABCDEF";
-static char buf[11];
+static char const l[] = "0123456789abcdef";
 
-static void putint(long int arg, int length, unsigned int base)
+static void putint(ssize_t arg, int length, unsigned int base)
 {
-    long int z;
+    if (arg < 0)
+        putc('-');
+
     switch (length) {
     case PRINTF_LENGTH_SHORT_SHORT:
-        z = (char)arg;
+        arg = (char)arg;
         break;
     case PRINTF_LENGTH_SHORT:
-        z = (short int)arg;
+        arg = (short int)arg;
         break;
     case PRINTF_LENGTH_DEFAULT:
-        z = (int)arg;
+        arg = (int)arg;
         break;
     case PRINTF_LENGTH_LONG:
-        z = arg;
+        arg = (long int)arg;
+        break;
+    case PRINTF_LENGTH_LONG_LONG:
+        arg = (long long int)arg;
+        break;
     }
 
-    if (z < 0) {
-        putc('-');
-        z = -z;
-    }
-
+    char buf[25] = { 0 };
     size_t i = 0;
     do {
-        buf[i++] = l[z % base];
-        z /= base;
-    } while (z > 0);
+        buf[i++] = l[arg % base];
+        arg /= base;
+    } while (arg > 0);
     while (i > 0)
         putc(buf[--i]);
 }
-static void putuint(unsigned long int arg, int length, unsigned int base)
+static void putuint(size_t arg, int length, unsigned int base)
 {
-    unsigned long int z;
     switch (length) {
     case PRINTF_LENGTH_SHORT_SHORT:
-        z = (unsigned char)arg;
+        arg = (unsigned char)arg;
         break;
     case PRINTF_LENGTH_SHORT:
-        z = (unsigned short int)arg;
+        arg = (unsigned short int)arg;
         break;
     case PRINTF_LENGTH_DEFAULT:
-        z = (unsigned int)arg;
+        arg = (unsigned int)arg;
         break;
     case PRINTF_LENGTH_LONG:
-        z = arg;
+        arg = (unsigned long int)arg;
+        break;
+    case PRINTF_LENGTH_LONG_LONG:
+        arg = (unsigned long long int)arg;
     }
 
     size_t i = 0;
+    char buf[25] = { 0 };
     do {
-        buf[i++] = l[z % base];
-        z /= base;
-    } while (z > 0);
+        buf[i++] = l[arg % base];
+        arg /= base;
+    } while (arg > 0);
     while (i > 0)
         putc(buf[--i]);
 }
@@ -122,16 +129,21 @@ void __attribute__((format(printf, 1, 2))) printf(char const* fmt, ...)
                 break;
             case 'd':
             case 'i':
-                putint(va_arg(ap, long int), length, 10);
+                putint(va_arg(ap, ssize_t), length, 10);
                 break;
             case 'o':
-                putuint(va_arg(ap, unsigned long int), length, 8);
+                putuint(va_arg(ap, size_t), length, 8);
+                break;
+            case 'p':
+                putc('0');
+                putc('x');
+                putuint(va_arg(ap, size_t), PRINTF_LENGTH_LONG_LONG, 16);
                 break;
             case 'u':
-                putuint(va_arg(ap, unsigned long int), length, 10);
+                putuint(va_arg(ap, size_t), length, 10);
                 break;
             case 'x':
-                putuint(va_arg(ap, unsigned long int), length, 16);
+                putuint(va_arg(ap, size_t), length, 16);
                 break;
             case '%':
                 putc('%');

@@ -28,9 +28,9 @@ void init_seg(void)
 {
     cpu_t* c = get_cpu();
     memset(&c->gdt[0], 0, sizeof(c->gdt));
-    c->gdt[KERNEL_CODE_GDT_INDEX] = SEG(KERNEL_PL, 1, 0, 0x0, 0xffffffff);
-    c->gdt[KERNEL_DATA_GDT_INDEX] = SEG(KERNEL_PL, 0, 1, 0x0, 0xffffffff);
-    c->gdt[USER_CODE_GDT_INDEX] = SEG(USER_PL, 1, 0, 0x0, 0xffffffff);
-    c->gdt[USER_DATA_GDT_INDEX] = SEG(USER_PL, 0, 1, 0x0, 0xffffffff);
-    lgdt(&c->gdt[0], sizeof(c->gdt));
+    c->gdt[KERNEL_CODE_GDT_INDEX] = SEG(KERNEL_PL, 1, 0);
+    c->gdt[KERNEL_DATA_GDT_INDEX] = SEG(KERNEL_PL, 0, 1);
+    c->gdt[USER_CODE_GDT_INDEX] = SEG(USER_PL, 1, 0);
+    c->gdt[USER_DATA_GDT_INDEX] = SEG(USER_PL, 0, 1);
+    lgdt(&c->gdt[0], sizeof(c->gdt), KERNEL_CODE_SEG);
 }

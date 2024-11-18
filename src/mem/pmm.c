@@ -1,6 +1,7 @@
 // Physical memory manager
 
 #include "kwmalloc.h"
+#include "mem/page.h"
 
 #include <cpu/x86.h>
 #include <multiboot2.h>
@@ -20,7 +21,7 @@ typedef struct section section_t;
 static section_t* sections = NULL;
 
 // tell physical memory manager about availabe regions of RAM
-static void pmm_add_physical(uintptr_t addr, uint32_t len)
+static void pmm_add_physical(uintptr_t addr, uint64_t len)
 {
     section_t* z = kwmalloc(sizeof(*z));
     z->addr = (addr >> PAGE_ORDER) << PAGE_ORDER;
@@ -46,7 +47,7 @@ void init_pmm(struct multiboot_tag_mmap const* mmap_info)
 
     for (size_t i = 0; i < nr_entries; i++) {
         if (mmap_entries[i].type == MULTIBOOT_MEMORY_AVAILABLE)
-            pmm_add_physical(mmap_entries[i].addr_low, mmap_entries[i].len_low);
+            pmm_add_physical(mmap_entries[i].addr, mmap_entries[i].len);
     }
 }
 

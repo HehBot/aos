@@ -172,12 +172,8 @@ struct multiboot_color {
 } __attribute__((packed));
 
 struct multiboot_mmap_entry {
-    //   uint64_t addr;
-    uint32_t addr_low;
-    uint32_t addr_high;
-    //   uint64_t len;
-    uint32_t len_low;
-    uint32_t len_high;
+    uint64_t addr;
+    uint64_t len;
     #define MULTIBOOT_MEMORY_AVAILABLE 1
     #define MULTIBOOT_MEMORY_RESERVED 2
     #define MULTIBOOT_MEMORY_ACPI_RECLAIMABLE 3
@@ -210,8 +206,7 @@ struct multiboot_tag_module {
 struct multiboot_tag_basic_meminfo {
     uint32_t type;
     uint32_t size;
-    uint32_t mem_lower;
-    uint32_t mem_upper;
+    uint64_t mem;
 } __attribute__((packed));
 
 struct multiboot_tag_bootdev {
@@ -255,8 +250,7 @@ struct multiboot_tag_framebuffer_common {
     uint32_t type;
     uint32_t size;
 
-    uint32_t framebuffer_addr_low;
-    uint32_t framebuffer_addr_high;
+    uint64_t framebuffer_addr;
     uint32_t framebuffer_pitch;
     uint32_t framebuffer_width;
     uint32_t framebuffer_height;
@@ -312,19 +306,17 @@ struct multiboot_tag_apm {
     uint16_t dseg_len;
 } __attribute__((packed));
 
-// struct multiboot_tag_efi32
-// {
-//     uint32_t type;
-//     uint32_t size;
-//     uint32_t pointer;
-// } __attribute__((packed));
-//
-// struct multiboot_tag_efi64
-// {
-//     uint32_t type;
-//     uint32_t size;
-//     uint64_t pointer;
-// } __attribute__((packed));
+struct multiboot_tag_efi32 {
+    uint32_t type;
+    uint32_t size;
+    uint32_t pointer;
+} __attribute__((packed));
+
+struct multiboot_tag_efi64 {
+    uint32_t type;
+    uint32_t size;
+    uint64_t pointer;
+} __attribute__((packed));
 
 struct multiboot_tag_smbios {
     uint32_t type;
@@ -353,28 +345,25 @@ struct multiboot_tag_network {
     uint8_t dhcpack[0];
 } __attribute__((packed));
 
-// struct multiboot_tag_efi_mmap
-// {
-//     uint32_t type;
-//     uint32_t size;
-//     uint32_t descr_size;
-//     uint32_t descr_vers;
-//     uint8_t efi_mmap[0];
-// } __attribute__((packed));
-//
-// struct multiboot_tag_efi32_ih
-// {
-//     uint32_t type;
-//     uint32_t size;
-//     uint32_t pointer;
-// } __attribute__((packed));
-//
-// struct multiboot_tag_efi64_ih
-// {
-//     uint32_t type;
-//     uint32_t size;
-//     uint64_t pointer;
-// } __attribute__((packed));
+struct multiboot_tag_efi_mmap {
+    uint32_t type;
+    uint32_t size;
+    uint32_t descr_size;
+    uint32_t descr_vers;
+    uint8_t efi_mmap[0];
+} __attribute__((packed));
+
+struct multiboot_tag_efi32_ih {
+    uint32_t type;
+    uint32_t size;
+    uint32_t pointer;
+} __attribute__((packed));
+
+struct multiboot_tag_efi64_ih {
+    uint32_t type;
+    uint32_t size;
+    uint64_t pointer;
+} __attribute__((packed));
 
 struct multiboot_tag_load_base_addr {
     uint32_t type;

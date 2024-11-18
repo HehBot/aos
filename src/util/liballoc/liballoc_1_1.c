@@ -115,7 +115,7 @@ static struct liballoc_major* l_memRoot = NULL; ///< The root memory block acqui
 static struct liballoc_major* l_bestBet = NULL; ///< The major with the most free memory.
 
 static unsigned int l_pageSize = PAGE_SIZE; ///< The size of an individual page.
-static unsigned int l_pageCount = INIT_HEAP_SZ; ///< The number of pages to request per chunk.
+static unsigned int l_pageCount = 1; ///< The number of pages to request per chunk.
 static unsigned long long l_allocated = 0; ///< Running total of allocated memory.
 static unsigned long long l_inuse = 0; ///< Running total of used memory.
 

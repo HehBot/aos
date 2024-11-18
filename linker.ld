@@ -22,21 +22,20 @@ SECTIONS
 
     . += KERN_BASE;
 
-    .bss : AT (ADDR (.bss) - KERN_BASE)
-    {
-        *(COMMON)
-        *(.bss)
-    }
     .text ALIGN (4K) : AT (ADDR (.text) - KERN_BASE)
     {
-        *(.text)
+        *(.text .text.*)
     }
-    .rodata : AT (ADDR (.rodata) - KERN_BASE)
+    .rodata ALIGN (4K) : AT (ADDR (.rodata) - KERN_BASE)
     {
-        *(.rodata)
+        *(.rodata .rodata.*)
+    }
+    .bss ALIGN (4K) : AT (ADDR (.bss) - KERN_BASE)
+    {
+        *(.bss .bss.*)
     }
     .data ALIGN (4K) : AT (ADDR (.data) - KERN_BASE)
     {
-        *(.data)
+        *(.data .data.*)
     }
 }

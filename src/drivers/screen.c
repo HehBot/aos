@@ -16,13 +16,17 @@ static uint8_t* vid_mem;
 static size_t screen_rows;
 static size_t screen_cols;
 
-void init_screen(struct multiboot_tag_framebuffer const* fbinfo)
+void init_screen(struct multiboot_tag_framebuffer const* fbinfo, int identmap)
 {
     struct multiboot_tag_framebuffer_common const* common = &fbinfo->common;
 
     size_t fb_size = (common->framebuffer_width * (common->framebuffer_height + 1) * (common->framebuffer_bpp >> 3));
 
-    vid_mem = map_phy(common->framebuffer_addr_low, fb_size, PTE_W);
+    if (identmap) {
+        // vid_mem = map_phy(common->framebuffer_addr, fb_size, PTE_W);
+        vid_mem = (uint8_t*)common->framebuffer_addr;
+    } else
+        vid_mem = (uint8_t*)common->framebuffer_addr;
 
     screen_rows = common->framebuffer_height;
     screen_cols = common->framebuffer_width;

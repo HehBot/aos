@@ -43,7 +43,7 @@ if [ ${READY} -eq 0 ]; then
     sync
 fi
 if [ ${BOOT} -eq 1 ]; then
-    sudo grub-install --target=i386-pc --boot-directory=${MOUNT_POINT}/boot --modules="normal part_msdos ext2 multiboot" --no-floppy /dev/loop0
+    sudo grub-install --target=i386-pc --boot-directory=${MOUNT_POINT}/boot --modules="normal part_msdos ext2 multiboot2" --no-floppy /dev/loop0
     sync
 fi
 tree ${MOUNT_POINT}

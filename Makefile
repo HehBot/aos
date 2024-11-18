@@ -28,13 +28,13 @@ BOOTCDROM := $(BUILD_DIR)/bootcdrom.iso
 INC_FLAGS = -I$(SRC_DIR)/ -I$(SRC_DIR)/util -I$(SRC_DIR)/util/liballoc
 
 ASMFLAGS := -c -g
-CFLAGS := -c -g -Wall -Wextra -Werror -ffreestanding -nostdlib -mno-red-zone -MMD -MP $(INC_FLAGS)
+CFLAGS := -c -g -Wall -Wextra -Werror -ffreestanding -fno-asynchronous-unwind-tables -nostdlib -mno-red-zone -MMD -MP $(INC_FLAGS) -Wno-unused-variable
 LDFLAGS := -T linker.ld
 
 EMU_FLAGS := -smp cpus=4,cores=1,threads=1,sockets=4
 
 run_cdrom: $(BOOTCDROM)
-	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw
+	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw -d int -no-reboot
 
 run_disk: $(BOOTDISK)
 	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTDISK),index=0,media=disk,format=raw

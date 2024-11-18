@@ -23,7 +23,7 @@
 
 struct multiboot_tag_framebuffer;
 
-void init_screen(struct multiboot_tag_framebuffer const* fbinfo);
+void init_screen(struct multiboot_tag_framebuffer const* fbinfo, int virtmap);
 void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_t bg_color);
 void clear_screen();
 

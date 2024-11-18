@@ -81,9 +81,9 @@ acpi_info_t init_acpi(void const* __rsdp)
         PANIC("Bad RSDP");
     }
 
-    uintptr_t table_pa = rsdp->rsdt_pa;
+    // uintptr_t table_pa = rsdp->rsdt_pa;
     // TODO wtf is the size here?? need unmap_pa
-    rsdt_t* rsdt = map_phy(table_pa, -1, 0);
+    rsdt_t* rsdt = NULL; // map_phy(table_pa, -1, 0);
 
     uint8_t sum;
     if (memcmp(rsdt->header.sign, "RSDT", 4) != 0 || (sum = memsum(rsdt, rsdt->header.len) != 0))
@@ -99,9 +99,9 @@ acpi_info_t init_acpi(void const* __rsdp)
     acpi_info_t ret;
 
     for (size_t i = 0; i < nr_rsdt_entries; ++i) {
-        table_pa = rsdt->other_sdt[i];
+        uintptr_t table_pa = rsdt->other_sdt[i];
         // TODO wtf is the size here?? need unmap_pa
-        acpi_sdt_header_t* h = map_phy(table_pa, -1, 0);
+        acpi_sdt_header_t* h = NULL; // map_phy(table_pa, -1, 0);
 
         printf(" ");
         for (int j = 0; j < 4; ++j)

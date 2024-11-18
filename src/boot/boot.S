@@ -1,11 +1,12 @@
 #include <cpu/x86.h>
+#include <mem/page.h>
 #define ASM_FILE
 #include <multiboot2.h>
 
 .globl _start
 .extern KERN_BASE
 
-.section .multiboot2.header, "ax"
+.section .multiboot2.header, "a"
 .align 16
 multiboot_header:
 .4byte MULTIBOOT2_HEADER_MAGIC
@@ -19,7 +20,7 @@ multiboot_header:
 .4byte 8
 multiboot_header_end:
 
-.section .boot.bss
+.section .boot.bss, "aw"
 // temporary paging hierarchy
 .align 4096
 p4_table:
@@ -29,11 +30,11 @@ p3_table:
 p2_table:
 .skip 0x1000
 // temporary stack
-stack_bottom:
+stack_end:
 .skip 64
-stack_top:
+stack:
 
-.section .boot.rodata
+.section .boot.rodata, "a"
 // temporary gdt
 gdt64:
 NULL_SEG = 0
@@ -49,7 +50,7 @@ kern_base:
 .section .boot.text, "ax"
 .code32
 _start:
-        mov $stack_top, %esp
+        mov $stack, %esp
         mov %ebx, %edi
 
         call check_multiboot2
@@ -65,10 +66,8 @@ _start:
         ljmp $CODE_SEG,$1f
 .code64
 1:
-        movabs $0x2f592f412f4b2f4f, %rax
-        mov %rax, 0xb8000
-
-        hlt
+        movabs $long_mode_start, %rax
+        jmp *%rax
 
 
 .code32
@@ -158,16 +157,17 @@ set_up_page_tables:
         mov %ebx, %ecx
         and $0x1ff, %ebx
         shr $9, %ecx
+        and $0x1ff, %ecx
 
         mov $p3_table, %eax
-        or $0b11, %eax
+        or $(PTE_W | PTE_P), %eax
         // identity
         mov %eax, p4_table
         // proper
         mov %eax, p4_table(,%ecx,8)
 
         mov $p2_table, %eax
-        or $0b11, %eax
+        or $(PTE_W | PTE_P), %eax
         // identity
         mov %eax, p3_table
         // proper

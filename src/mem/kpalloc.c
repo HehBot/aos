@@ -44,7 +44,7 @@ static run_t* free_list_end;
 static uintptr_t end;
 static run_t* occ_list;
 
-void init_kpalloc(void)
+void init_kpalloc(virt_addr_t heap_start, size_t init_heap_sz)
 {
     pool = kwmalloc(POOL_SZ * (sizeof pool[0]));
     memset(pool, 0, POOL_SZ * (sizeof pool[0]));
@@ -52,11 +52,10 @@ void init_kpalloc(void)
     free_list = free_list_end = alloc_run();
     free_list->next = free_list->prev = NULL;
 
-    // extern void* kernel_heap_start;
-    // free_list->addr = (uintptr_t)&kernel_heap_start;
-    free_list->sz = INIT_HEAP_SZ;
+    free_list->addr = (uintptr_t)heap_start;
+    free_list->sz = init_heap_sz;
 
-    end = free_list->addr + INIT_HEAP_SZ * PAGE_SIZE;
+    end = free_list->addr + init_heap_sz * PAGE_SIZE;
     occ_list = NULL;
 }
 

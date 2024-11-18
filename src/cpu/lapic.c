@@ -63,7 +63,9 @@ static void lapic_write(size_t reg, uint32_t val)
 void init_lapic(uintptr_t lapic_addr)
 {
     // FIXME max size as macro
-    lapic = map_phy(lapic_addr, 0x400, PTE_W);
+    // lapic = map_phy(lapic_addr, 0x400, PTE_W);
+
+    lapic = (void*)lapic_addr;
 
     lapic_write(LAPIC_SVR, SW_ENABLE | (T_IRQ0 + IRQ_SPUR));
 
