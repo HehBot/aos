@@ -100,8 +100,7 @@ typedef struct elf_section_header {
 
 static gdt_entry_t gdt[] = {
     { 0 },
-    { 0 },
-    [2] = SEG(KERNEL_PL, 1, 1),
+    [KERNEL_CODE_GDT_INDEX] = SEG(KERNEL_PL, 1, 0),
 };
 
 void main(phys_addr_t phys_addr_mboot_info)
@@ -109,15 +108,11 @@ void main(phys_addr_t phys_addr_mboot_info)
     struct multiboot_info mboot_info = parse_mboot_info(kernel_static_from_phys_addr(phys_addr_mboot_info));
 
     init_screen(mboot_info.tag_framebuffer, 0);
-
-    lgdt(&gdt[0], sizeof(gdt), 2 * GDT_STRIDE);
-    init_idt();
-
-    int a;
-    asm volatile("mov %%cs, %0" : "=r"(a) :);
-    printf("CS: %d\n", a);
-
     printf("Hello from C!\n");
+
+    lgdt(&gdt[0], sizeof(gdt), KERNEL_CODE_SEG);
+    init_idt(KERNEL_CODE_SEG);
+
     asm volatile("int3");
 
     struct multiboot_tag_elf_sections const* e = mboot_info.tag_elf_sections;

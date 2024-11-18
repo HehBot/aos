@@ -34,7 +34,7 @@ LDFLAGS := -T linker.ld
 EMU_FLAGS := -smp cpus=4,cores=1,threads=1,sockets=4
 
 run_cdrom: $(BOOTCDROM)
-	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw -d int -no-reboot
+	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw
 
 run_disk: $(BOOTDISK)
 	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTDISK),index=0,media=disk,format=raw

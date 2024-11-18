@@ -52,9 +52,10 @@ typedef void (*isr_t)(cpu_state_t*);
 typedef struct {
     uint16_t low_offset;
     uint16_t seg;
-    uint8_t always0_1;
+    uint8_t ist : 3;
+    uint8_t : 5;
     uint8_t gate_type : 4;
-    uint8_t always0_2 : 1;
+    uint8_t : 1;
     uint8_t dpl : 2;
     uint8_t present : 1;
     uint16_t mid_offset;
@@ -116,7 +117,7 @@ typedef struct gdt_entry {
             .present = 1,                \
             .limit_high = 0xf,           \
             .long_mode = (1 & d_or_c),   \
-            .type_16b_or_32b = 1,        \
+            .type_16b_or_32b = 0,        \
             .gran = 1,                   \
         }
     #define SEG_TSS(pl)                  \
@@ -146,17 +147,16 @@ typedef struct gdt_desc {
 } __attribute__((packed)) gdt_desc_t;
     #define GDT_STRIDE (sizeof(gdt_entry_t))
 
-static inline void lgdt(gdt_entry_t* gdt, uint16_t size, uint64_t cs)
+static inline void lgdt(gdt_entry_t* gdt, uint16_t size, uint16_t cs)
 {
     volatile gdt_desc_t gdtd = { size - 1, gdt };
-    uint64_t tmp;
     asm volatile(
         "lgdt (%2); "
         "pushq %1; "
         "movq $1f, %0; "
         "push %0; "
         "retfq; "
-        "1:" : "=r"(tmp) : "r"(cs), "r"(&gdtd));
+        "1:" : : "r"((uint64_t)1), "r"((uint64_t)cs), "r"(&gdtd));
 }
 static inline void ltr(uint16_t tss_seg)
 {
