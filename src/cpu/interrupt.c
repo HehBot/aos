@@ -11,12 +11,12 @@
 static idt_entry_t idt[NR_ISRS] = { 0 };
 extern void (*(isrs[256]))(void);
 
-static inline void set_idt_entry(size_t n, void (*isr)(void), uint8_t gate_type, uint8_t dpl, uint8_t ist_index)
+static inline void set_idt_entry(size_t n, void (*isr)(void), uint8_t gate_type, uint8_t dpl, uint8_t hw_ist_index)
 {
     uintptr_t addr = (uintptr_t)isr;
     idt[n] = (idt_entry_t) {
         .low_offset = (addr & 0xffff),
-        .ist = ist_index,
+        .ist = hw_ist_index,
         .seg = KERNEL_CODE_SEG,
         .gate_type = gate_type,
         .dpl = dpl,
@@ -26,12 +26,12 @@ static inline void set_idt_entry(size_t n, void (*isr)(void), uint8_t gate_type,
     };
 }
 
-void init_idt(uint8_t double_fault_ist_index)
+void init_idt(uint8_t double_fault_ist)
 {
     for (size_t i = 0; i < NR_ISRS; ++i)
         set_idt_entry(i, isrs[i], GATE_TYPE_INT, KERNEL_PL, 0);
+    set_idt_entry(T_DOUBLE_FAULT, isrs[T_DOUBLE_FAULT], GATE_TYPE_INT, KERNEL_PL, double_fault_ist + 1);
     set_idt_entry(T_SYSCALL, isrs[T_SYSCALL], GATE_TYPE_TRAP, USER_PL, 0);
-    set_idt_entry(T_DOUBLE_FAULT, isrs[T_DOUBLE_FAULT], GATE_TYPE_TRAP, KERNEL_PL, double_fault_ist_index);
     lidt(&idt[0], sizeof(idt));
 }
 
@@ -41,13 +41,13 @@ void excep(cpu_state_t* cpu_state)
         "Division By Zero",
         "Debug Panic",
         "Non Maskable Interrupt",
-        "Breakpoint",
+        [T_BREAKPOINT] = "Breakpoint",
         "Into Detected Overflow",
         "Out of Bounds",
         "Invalid Opcode",
         "No Coprocessor",
 
-        "Double Fault",
+        [T_DOUBLE_FAULT] = "Double Fault",
         "Coprocessor Segment Overrun",
         "Bad TSS",
         "Segment Not Present",
@@ -77,12 +77,10 @@ void excep(cpu_state_t* cpu_state)
 
     int int_no = cpu_state->int_no, err_code = cpu_state->err_code;
 
-    if (int_no == 3)
+    if (int_no == T_BREAKPOINT)
         return;
 
-    printf("\nPANIC\n");
-    printf("%s detected\n", exception_messages[int_no]);
-
+    printf("\nPANIC: %s\n", exception_messages[int_no]);
     switch (int_no) {
     case 13:
         // https://wiki.osdev.org/Exceptions#Selector_Error_Code

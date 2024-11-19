@@ -75,6 +75,7 @@ static inline void lidt(idt_entry_t* idt, uint16_t size)
 }
 #endif // __ASSEMBLER__
 
+#define T_BREAKPOINT 0x03
 #define T_DOUBLE_FAULT 0x08
 #define T_SYSCALL 0x80
 #define T_IRQ0 0x20
@@ -89,7 +90,10 @@ static inline void lidt(idt_entry_t* idt, uint16_t size)
 #ifndef __ASSEMBLER__
 typedef union gdt_entry {
     struct {
-        uint16_t : 16; // limit_low;
+        union {
+            uint16_t APP_limit_low;
+            uint16_t SYS_tss_size;
+        };
         uint16_t base_low;
         uint8_t base_mid;
         union {
@@ -122,6 +126,16 @@ typedef union gdt_entry {
 } __attribute__((packed)) gdt_entry_t;
     #define GDT_STRIDE (sizeof(gdt_entry_t))
 
+typedef struct tss {
+    uint32_t : 32;
+    uint64_t pvt[3];
+    uint64_t : 64;
+    uint64_t ist[7];
+    uint64_t : 64;
+    uint16_t : 16;
+    uint16_t iomap_base;
+} __attribute__((packed, __aligned__(16))) tss_t;
+
     #define SEG(pl, d_or_c, rw)          \
         (gdt_entry_t)                    \
         {                                \
@@ -134,9 +148,10 @@ typedef union gdt_entry {
             .APP_present = 1,            \
             .long_mode = (1 & (d_or_c)), \
         }
-    #define SEG_TSS1(pl, tss)                                 \
+    #define SEG_TSS1(pl, tss, tss_size)                       \
         (gdt_entry_t)                                         \
         {                                                     \
+            .SYS_tss_size = (tss_size),                       \
             .base_low = (((uintptr_t)(tss)) & 0xffff),        \
             .base_mid = ((((uintptr_t)(tss)) >> 16) & 0xff),  \
             .base_high = ((((uintptr_t)(tss)) >> 24) & 0xff), \
@@ -146,29 +161,18 @@ typedef union gdt_entry {
             .SYS_present = 1,                                 \
             .long_mode = 1,                                   \
         }
-    #define SEG_TSS2(pl, tss)                            \
+    #define SEG_TSS2(tss)                                \
         (gdt_entry_t)                                    \
         {                                                \
             .base_upper_32 = (((uintptr_t)(tss)) >> 32), \
         }
 
-typedef struct tss {
-    uint32_t : 32;
-    uint64_t pvt[3];
-    uint64_t : 64;
-    uint64_t ist[7];
-    uint64_t : 64;
-    uint16_t : 16;
-    uint16_t iomap_base;
-} __attribute__((packed)) tss_t;
-
-typedef struct gdt_desc {
-    uint16_t size_m_1;
-    gdt_entry_t* gdt;
-} __attribute__((packed)) gdt_desc_t;
-
 static inline void lgdt(gdt_entry_t* gdt, uint16_t size, uint16_t cs)
 {
+    typedef struct gdt_desc {
+        uint16_t size_m_1;
+        gdt_entry_t* gdt;
+    } __attribute__((packed)) gdt_desc_t;
     volatile gdt_desc_t gdtd = { size - 1, gdt };
     asm volatile(
         "lgdt (%1); "
@@ -193,8 +197,7 @@ static inline void ltr(uint16_t tss_seg)
 #define KERNEL_DATA_GDT_INDEX 2
 #define USER_CODE_GDT_INDEX 3
 #define USER_DATA_GDT_INDEX 4
-#define TSS1_GDT_INDEX 5
-#define TSS2_GDT_INDEX 6
+#define TSS_GDT_INDEX 5
 
 #define KERNEL_PL 0
 #define USER_PL 3
@@ -203,7 +206,7 @@ static inline void ltr(uint16_t tss_seg)
 #define KERNEL_DATA_SEG ((KERNEL_DATA_GDT_INDEX * GDT_STRIDE) | KERNEL_PL)
 #define USER_CODE_SEG ((USER_CODE_GDT_INDEX * GDT_STRIDE) | USER_PL)
 #define USER_DATA_SEG ((USER_DATA_GDT_INDEX * GDT_STRIDE) | USER_PL)
-#define TSS_SEG ((TSS1_GDT_INDEX * GDT_STRIDE) | KERNEL_PL)
+#define TSS_SEG ((TSS_GDT_INDEX * GDT_STRIDE) | KERNEL_PL)
 
 // Memory and Paging
 #define CR4_PAE 0x20

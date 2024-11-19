@@ -100,24 +100,31 @@ typedef struct elf_section_header {
 
 uint8_t init_gdt()
 {
-    static uint8_t excep_stack[PAGE_SIZE] __attribute__((__aligned__(16)));
+    uint8_t double_fault_ist = 0;
 
-    uint8_t double_fault_ist_index = 1;
-    static tss_t tss = { 0 };
-    tss.ist[double_fault_ist_index] = (uint64_t)&excep_stack[PAGE_SIZE];
-    tss.iomap_base = sizeof(tss_t);
-
+    static tss_t tss;
+    static uint8_t excep_stack[256] __attribute__((__aligned__(16)));
     static gdt_entry_t gdt[NR_GDT_ENTRIES] = {
-        [KERNEL_CODE_GDT_INDEX] = SEG(KERNEL_PL, 1, 0),
+        [KERNEL_CODE_GDT_INDEX] = { {} },
+        [TSS_GDT_INDEX] = { {} },
+        [TSS_GDT_INDEX + 1] = { {} },
     };
 
-    gdt[TSS1_GDT_INDEX] = SEG_TSS1(KERNEL_PL, (uintptr_t)&tss);
-    gdt[TSS2_GDT_INDEX] = SEG_TSS2(KERNEL_PL, (uintptr_t)&tss);
+    tss.ist[double_fault_ist] = (uint64_t)&excep_stack[sizeof(excep_stack)];
+    tss.iomap_base = sizeof(tss_t);
+
+    // to verify that excep_stack is indeed used, uncomment
+    //      the next line and see that `int $T_DOUBLE_FAULT` causes #GPF
+    // tss.ist[double_fault_ist] = 0x8fffffffffff;
+
+    gdt[KERNEL_CODE_GDT_INDEX] = SEG(KERNEL_PL, 1, 0);
+    gdt[TSS_GDT_INDEX] = SEG_TSS1(KERNEL_PL, (uintptr_t)&tss, sizeof(tss));
+    gdt[TSS_GDT_INDEX + 1] = SEG_TSS2((uintptr_t)&tss);
 
     lgdt(&gdt[0], sizeof(gdt), KERNEL_CODE_SEG);
     ltr(TSS_SEG);
 
-    return double_fault_ist_index;
+    return double_fault_ist;
 }
 
 typedef struct {
@@ -159,19 +166,18 @@ static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sectio
 
 void main(phys_addr_t phys_addr_mboot_info)
 {
+    /*
+     * set up gdt and idt
+     */
+    uint8_t double_fault_ist = init_gdt();
+    init_idt(double_fault_ist);
+
+    asm volatile("int3");
+
     struct multiboot_info mboot_info = parse_mboot_info(kernel_static_from_phys_addr(phys_addr_mboot_info));
 
     init_screen(mboot_info.tag_framebuffer, 0);
     printf("Hello from C!\n");
-
-    /*
-     * set up gdt and idt
-     */
-    uint8_t ist_index = init_gdt();
-    init_idt(ist_index);
-
-    asm volatile("int3");
-    asm volatile("int $0x8");
 
     /*
      * get section info from multiboot
