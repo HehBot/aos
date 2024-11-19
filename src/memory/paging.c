@@ -15,8 +15,7 @@ static page_table_t map_temp_p1;
 static virt_addr_t buf_page = (virt_addr_t)0xfffffffffffff000;
 
 static page_table_t* p4;
-
-virt_addr_t map_temp(phys_addr_t pa)
+static virt_addr_t map_temp(phys_addr_t pa)
 {
     map_temp_p1.entries[VA_P1_INDEX(buf_page)] = PTE(pa, PTE_W | PTE_P);
     flush_tlb(buf_page);
@@ -55,9 +54,7 @@ void init_paging()
     flush_tlb_all();
 }
 
-#define PAGE_WALK_ERROR_ABSENT ((void*)1)
-#define PAGE_WALK_ERROR_PARENT_ENTRY_MARKED_HP ((void*)2)
-static page_table_t* page_walk(virt_addr_t addr, page_table_level_t level)
+static int page_walk(virt_addr_t addr, page_table_level_t level, page_table_t** ret)
 {
     page_table_level_t curr_level = PAGE_TABLE_P4;
     page_table_t* curr_page_table = p4;
@@ -68,9 +65,9 @@ static page_table_t* page_walk(virt_addr_t addr, page_table_level_t level)
         pte_t* pte = &curr_page_table->entries[VA_PT_INDEX(addr, curr_level)];
 
         if (((*pte) & PTE_P) == 0)
-            return PAGE_WALK_ERROR_ABSENT;
+            return PAGING_ERROR_PAGE_NOT_MAPPED;
         else if ((*pte) & PTE_HP)
-            return PAGE_WALK_ERROR_PARENT_ENTRY_MARKED_HP;
+            return PAGING_ERROR_PARENT_ENTRY_MARKED_HP;
 
         phys_addr_t pa = PTE_FRAME(*pte);
 
@@ -78,10 +75,26 @@ static page_table_t* page_walk(virt_addr_t addr, page_table_level_t level)
 
         curr_level--;
     }
-    return curr_page_table;
+    *ret = curr_page_table;
+    return PAGING_OK;
+}
+static noignore int get_pte(virt_addr_t page, page_type_t type, pte_t** ret)
+{
+    page_table_level_t parent_level = page_type_parent_table_level(type);
+    page_table_t* parent_table;
+    int err = page_walk(page, parent_level, &parent_table);
+    if (err != PAGING_OK)
+        return err;
+
+    pte_t* pte = &parent_table->entries[VA_PT_INDEX(page, parent_level)];
+    if ((((*pte) & PTE_P) == 0) || (type != PAGE_4KiB && (((*pte) & PTE_HP) == 0)))
+        return PAGING_ERROR_PAGE_NOT_MAPPED;
+
+    *ret = pte;
+    return PAGING_OK;
 }
 
-int map_to_with_table_flags(virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags, pte_flags_t parent_table_flags)
+int paging_map_with_table_flags(virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags, pte_flags_t parent_table_flags)
 {
     page_table_level_t parent_level = page_type_parent_table_level(type);
 
@@ -124,24 +137,17 @@ int map_to_with_table_flags(virt_addr_t page, phys_addr_t frame, page_type_t typ
     return PAGING_OK;
 }
 
-int map_to(virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags)
+int paging_map(virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags)
 {
-    return map_to_with_table_flags(page, frame, type, flags, PTE_W | PTE_P);
+    return paging_map_with_table_flags(page, frame, type, flags, PTE_W | PTE_P);
 }
 
-phys_addr_t unmap(virt_addr_t page, page_type_t type)
+phys_addr_t paging_unmap(virt_addr_t page, page_type_t type)
 {
-    page_table_level_t parent_level = page_type_parent_table_level(type);
-    page_table_t* parent_table = page_walk(page, parent_level);
-
-    if (parent_table == PAGE_WALK_ERROR_ABSENT)
-        return PAGING_ERROR_PAGE_NOT_MAPPED;
-    else if (parent_table == PAGE_WALK_ERROR_PARENT_ENTRY_MARKED_HP)
-        return PAGING_ERROR_PARENT_ENTRY_MARKED_HP;
-
-    pte_t* pte = &parent_table->entries[VA_PT_INDEX(page, parent_level)];
-    if ((((*pte) & PTE_P) == 0) || (type != PAGE_4KiB && (((*pte) & PTE_HP) == 0)))
-        return PAGING_ERROR_PAGE_NOT_MAPPED;
+    pte_t* pte;
+    int err = get_pte(page, type, &pte);
+    if (err != PAGING_OK)
+        return err;
 
     phys_addr_t frame = PTE_FRAME(*pte);
     *pte = 0;
@@ -150,19 +156,26 @@ phys_addr_t unmap(virt_addr_t page, page_type_t type)
     return frame;
 }
 
-phys_addr_t translate_page(virt_addr_t page, page_type_t type)
+phys_addr_t paging_translate_page(virt_addr_t page, page_type_t type)
 {
-    page_table_level_t parent_level = page_type_parent_table_level(type);
-    page_table_t* parent_table = page_walk(page, parent_level);
-
-    if (parent_table == PAGE_WALK_ERROR_ABSENT)
-        return PAGING_ERROR_PAGE_NOT_MAPPED;
-    else if (parent_table == PAGE_WALK_ERROR_PARENT_ENTRY_MARKED_HP)
-        return PAGING_ERROR_PARENT_ENTRY_MARKED_HP;
-
-    pte_t* pte = &parent_table->entries[VA_PT_INDEX(page, parent_level)];
-    if ((((*pte) & PTE_P) == 0) || (type != PAGE_4KiB && (((*pte) & PTE_HP) == 0)))
-        return PAGING_ERROR_PAGE_NOT_MAPPED;
+    pte_t* pte;
+    int err = get_pte(page, type, &pte);
+    if (err != PAGING_OK)
+        return err;
 
     return PTE_FRAME(*pte);
+}
+
+noignore int paging_update_flags(virt_addr_t page, page_type_t type, pte_flags_t flags)
+{
+    pte_t* pte;
+    int err = get_pte(page, type, &pte);
+    if (err != PAGING_OK)
+        return err;
+
+    phys_addr_t frame = PTE_FRAME(*pte);
+    *pte = PTE(frame, flags | PTE_P | (type == PAGE_4KiB ? 0 : PTE_HP));
+    flush_tlb(page);
+
+    return PAGING_OK;
 }

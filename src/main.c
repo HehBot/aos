@@ -127,11 +127,19 @@ uint8_t init_gdt()
 typedef struct {
     char const* name;
     pte_flags_t flags;
-    elf_section_header_t section;
+    phys_addr_t start, end;
+    int present;
 } section_info_t;
 
-static void get_section_info(struct multiboot_tag_elf_sections const* e, section_info_t* requested_section_info, size_t nr_sections)
+static void get_section_info(struct multiboot_tag_elf_sections const* e, section_info_t (*section_info)[4])
 {
+    section_info_t si[4] = {
+        { ".text", PTE_NX, 0, 0, 0 },
+        { ".rodata", 0, 0, 0, 0 },
+        { ".data", PTE_W, 0, 0, 0 },
+        { ".bss", PTE_W, 0, 0, 0 },
+    };
+
     elf_section_header_t shstrtab = (void*)&e->sections[e->shndx * e->entsize];
     char const* strings = (void*)shstrtab->addr;
     for (size_t i = 0; i < e->num; ++i) {
@@ -139,22 +147,46 @@ static void get_section_info(struct multiboot_tag_elf_sections const* e, section
         if ((section->flags & SHF_ALLOC) == 0)
             continue;
         char const* name = &strings[section->name];
-        for (size_t i = 0; i < nr_sections; ++i) {
-            if (!memcmp(requested_section_info[i].name, name, strlen(requested_section_info[i].name))) {
-                requested_section_info[i].section = section;
+        for (size_t i = 0; i < 4; ++i) {
+            if (!memcmp(si[i].name, name, strlen(si[i].name))) {
+                si[i].start = section->addr;
+                si[i].end = section->addr + section->size;
+                si[i].present = 1;
                 break;
             }
         }
     }
+    if (!si[0].present)
+        PANIC("No text section");
+    /*
+     * coalesce .data and .bss, we know they will be consecutive
+     */
+    if (si[2].present && si[3].present) {
+        si[2].name = ".data+.bss";
+        if (si[2].start < si[3].start) {
+            if (si[2].end != si[3].start)
+                PANIC("Bad linker script");
+            si[2].end = si[3].end;
+        } else {
+            if (si[3].end != si[2].start)
+                PANIC("Bad linker script");
+            si[2].start = si[3].start;
+        }
+        si[3] = (section_info_t) {};
+    }
+
+    memcpy(section_info, &si, sizeof(si));
 }
 
 static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sections)
 {
     for (size_t i = 0; i < nr_sections; ++i) {
-        elf_section_header_t section = section_info[i].section;
-        if (section != NULL) {
-            phys_addr_t first_frame = phys_addr_of_kernel_static((virt_addr_t)PAGE_ROUND_DOWN(section->addr));
-            phys_addr_t last_frame = phys_addr_of_kernel_static((virt_addr_t)PAGE_ROUND_DOWN(section->addr + section->size - 1));
+        if (section_info[i].present) {
+            phys_addr_t section_start = phys_addr_of_kernel_static((virt_addr_t)section_info[i].start);
+            phys_addr_t section_end = phys_addr_of_kernel_static((virt_addr_t)section_info[i].end);
+            printf("Section %s: 0x%lx - 0x%lx\n", section_info[i].name, section_start, section_end);
+            phys_addr_t first_frame = PAGE_ROUND_DOWN(section_start);
+            phys_addr_t last_frame = PAGE_ROUND_DOWN(section_end - 1);
             for (phys_addr_t p = first_frame; p <= last_frame; p += PAGE_SIZE)
                 if (frame_allocator_reserve_frame(p) != FRAME_ALLOCATOR_OK)
                     PANIC("Unable to reserve kernel frames");
@@ -180,36 +212,29 @@ void main(phys_addr_t phys_addr_mboot_info)
 
     /*
      * get section info from multiboot
-     * we want sections .text, .rodata, .data, .bss
      */
-    section_info_t section_info[4] = {
-        { ".text", PTE_NX, NULL },
-        { ".rodata", 0, NULL },
-        { ".data", PTE_W, NULL },
-        { ".bss", PTE_W, NULL },
-    };
-    size_t nr_sections = sizeof(section_info) / sizeof(section_info[0]);
-    get_section_info(mboot_info.tag_elf_sections, section_info, nr_sections);
-    if (section_info[0].section == NULL)
-        PANIC("No text section");
+    section_info_t section_info[4];
+    get_section_info(mboot_info.tag_elf_sections, &section_info);
 
-    init_frame_allocator(mboot_info.tag_mmap);
-    reserve_kernel_frames(section_info, nr_sections);
     /*
-     * reserve multiboot info frames
+     * initialise frame allocator and reserve kernel frames
+     * TODO also reserve multiboot info frames
      */
-    for (phys_addr_t p = PAGE_ROUND_DOWN(phys_addr_mboot_info); p <= PAGE_ROUND_DOWN(phys_addr_mboot_info + mboot_info.size_reserved); p += PAGE_SIZE)
-        if (frame_allocator_reserve_frame(p) != FRAME_ALLOCATOR_OK)
-            PANIC("Unable to reserve multiboot info frames");
+    init_frame_allocator(mboot_info.tag_mmap);
+    reserve_kernel_frames(section_info, sizeof(section_info) / sizeof(section_info[0]));
 
+    /*
+     * initialise paging
+     */
     init_paging();
 
     virt_addr_t mmio_devices = (virt_addr_t)0x2000000;
-
     mmio_devices = init_screen(mboot_info.tag_framebuffer, mmio_devices);
 
+    /*
+     * TODO reclaim MULTIBOOT_MEMORY_ACPI_RECLAIMABLE entries
+     */
     // acpi_info_t acpi_info = init_acpi(mboot_info.tag_old_acpi->rsdp);
-    // TODO reclaim MULTIBOOT_MEMORY_ACPI_RECLAIMABLE entries
 
     // init_lapic(acpi_info.lapic_addr);
     // init_seg(); // needs get_cpu which needs lapic initialised
@@ -228,7 +253,7 @@ void main(phys_addr_t phys_addr_mboot_info)
         phys_addr_t frame = frame_allocator_get_frame();
         if (frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
             PANIC("Unable to allocate frames for heap");
-        int err = map_to(heap_start + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_W | PTE_P);
+        int err = paging_map(heap_start + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_W | PTE_P);
         if (err != PAGING_OK)
             PANIC("Unable to map heap");
     }
@@ -239,6 +264,12 @@ void main(phys_addr_t phys_addr_mboot_info)
         if (*x != 0x123456789abcdef0)
             PANIC("read != write");
     }
+
+    int err = paging_update_flags(heap_start, PAGE_4KiB, PTE_P);
+    if (err != PAGING_OK)
+        PANIC("heh");
+    uint64_t* x = heap_start;
+    *x = 0x123456789abcdef0;
 
     printf("Haven't crashed\n");
 

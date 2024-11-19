@@ -15,10 +15,11 @@ static inline _Noreturn void HALT()
     asm("cli; hlt");
     __builtin_unreachable();
 }
-    #define PANIC(str)                                                   \
-        do {                                                             \
-            printf("%s:%d,%s: %s\n", __FILE__, __LINE__, __func__, str); \
-            HALT();                                                      \
+    #define PANIC(str)                                       \
+        do {                                                 \
+            printf("PANIC at function %s in file %s:%d\n%s", \
+                   __func__, __FILE__, __LINE__, str);       \
+            HALT();                                          \
         } while (0)
 
     // EFLAGS

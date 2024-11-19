@@ -34,7 +34,7 @@ SECTIONS
     {
         *(.bss .bss.*)
     }
-    .data ALIGN (4K) : AT (ADDR (.data) - KERN_BASE)
+    .data : AT (ADDR (.data) - KERN_BASE)
     {
         *(.data .data.*)
     }
