@@ -1,6 +1,5 @@
 #include "kwmalloc.h"
 #include "mm.h"
-#include "pmm.h"
 
 #include <cpu/x86.h>
 #include <stddef.h>
@@ -80,8 +79,8 @@ void* kpalloc(size_t n)
         // optimise
         // nr = (nr * 3) / 2;
 
-        for (uintptr_t virt = end; virt < end + nr * PAGE_SIZE; virt += PAGE_SIZE)
-            map(pmm_get_frame(), (void*)virt, PAGE_SIZE, PTE_W);
+        // for (uintptr_t virt = end; virt < end + nr * PAGE_SIZE; virt += PAGE_SIZE)
+        //     map(pmm_get_frame(), (void*)virt, PAGE_SIZE, PTE_W);
 
         if (free_list_end != NULL && free_list_end->addr + free_list_end->sz * PAGE_SIZE == end)
             free_list_end->sz += nr;
@@ -131,7 +130,7 @@ void* kpalloc(size_t n)
 
 int kpfree(void* a)
 {
-    uintptr_t addr = PG_ROUND_DOWN((uintptr_t)a);
+    uintptr_t addr = PAGE_ROUND_DOWN((uintptr_t)a);
     run_t* p = occ_list;
     for (; p != NULL && p->addr != addr; p = p->next)
         ;

@@ -156,8 +156,8 @@ static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sectio
     for (size_t i = 0; i < nr_sections; ++i) {
         elf_section_header_t section = section_info[i].section;
         if (section != NULL) {
-            phys_addr_t first_frame = phys_addr_of_kernel_static((virt_addr_t)PG_ROUND_DOWN(section->addr));
-            phys_addr_t last_frame = phys_addr_of_kernel_static((virt_addr_t)PG_ROUND_DOWN(section->addr + section->size - 1));
+            phys_addr_t first_frame = phys_addr_of_kernel_static((virt_addr_t)PAGE_ROUND_DOWN(section->addr));
+            phys_addr_t last_frame = phys_addr_of_kernel_static((virt_addr_t)PAGE_ROUND_DOWN(section->addr + section->size - 1));
             for (phys_addr_t p = first_frame; p <= last_frame; p += PAGE_SIZE)
                 pmm_reserve_frame(p);
         }
@@ -199,7 +199,7 @@ void main(phys_addr_t phys_addr_mboot_info)
     /*
      * reserve multiboot info frames
      */
-    for (phys_addr_t p = PG_ROUND_DOWN(phys_addr_mboot_info); p <= PG_ROUND_DOWN(phys_addr_mboot_info + mboot_info.size_reserved); p += PAGE_SIZE)
+    for (phys_addr_t p = PAGE_ROUND_DOWN(phys_addr_mboot_info); p <= PAGE_ROUND_DOWN(phys_addr_mboot_info + mboot_info.size_reserved); p += PAGE_SIZE)
         pmm_reserve_frame(p);
 
     // init_mm();
