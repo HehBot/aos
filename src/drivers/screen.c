@@ -17,30 +17,30 @@ static uint8_t* vid_mem;
 static size_t screen_rows;
 static size_t screen_cols;
 
-virt_addr_t init_screen(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t addr_to_use_for_mapping)
+void init_screen(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t* mapping_addr_ptr)
 {
     struct multiboot_tag_framebuffer_common const* common = &fbinfo->common;
 
     size_t fb_size = (common->framebuffer_width * (common->framebuffer_height + 1) * (common->framebuffer_bpp >> 3));
 
-    if (addr_to_use_for_mapping == NULL)
+    if (mapping_addr_ptr == NULL)
         vid_mem = (uint8_t*)common->framebuffer_addr;
     else {
-        vid_mem = addr_to_use_for_mapping;
-        for (size_t i = 0; i < fb_size; i += PAGE_SIZE, addr_to_use_for_mapping += PAGE_SIZE) {
+        vid_mem = *mapping_addr_ptr;
+        virt_addr_t addr = *mapping_addr_ptr;
+        for (size_t i = 0; i < fb_size; i += PAGE_SIZE, addr += PAGE_SIZE) {
             int err = frame_allocator_reserve_frame(common->framebuffer_addr + i);
             if (err != FRAME_ALLOCATOR_OK && err != FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME)
                 PANIC("Unable to reserve framebuffer frames");
-            err = paging_map(addr_to_use_for_mapping, common->framebuffer_addr, PAGE_4KiB, PTE_W | PTE_P);
+            err = paging_map(addr, common->framebuffer_addr, PAGE_4KiB, PTE_W | PTE_P);
             if (err != PAGING_OK)
                 PANIC("Unable to map framebuffer frames");
         }
+        *mapping_addr_ptr = addr;
     }
 
     screen_rows = common->framebuffer_height;
     screen_cols = common->framebuffer_width;
-
-    return addr_to_use_for_mapping;
 }
 
 static inline size_t get_screen_offset(size_t cols, size_t rows)

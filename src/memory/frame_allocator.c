@@ -77,7 +77,7 @@ int frame_allocator_reserve_frame(phys_addr_t addr)
             if (bit)
                 return FRAME_ALLOCATOR_ERROR_ALREADY_TAKEN;
 
-            *entry |= (1 << bit_index_in_entry);
+            *entry |= (((uint64_t)1) << bit_index_in_entry);
             return FRAME_ALLOCATOR_OK;
         }
         p = p->next;
@@ -131,7 +131,7 @@ phys_addr_t frame_allocator_get_frame()
                 if (frame > p->last_frame)
                     continue;
 
-                bitmap[entry_index] |= (1 << bit_index_in_entry);
+                bitmap[entry_index] |= (((uint64_t)1) << bit_index_in_entry);
 
                 return frame;
             }
@@ -191,7 +191,7 @@ int frame_allocator_free_frame(phys_addr_t addr)
             if (!bit)
                 return FRAME_ALLOCATOR_ERROR_ALREADY_FREED;
 
-            *entry ^= (1 << bit_index_in_entry);
+            *entry ^= (((uint64_t)1) << bit_index_in_entry);
             return 1;
         }
         p = p->next;

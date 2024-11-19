@@ -30,11 +30,11 @@ typedef struct acpi_sdt_header {
 
 typedef struct rsdt {
     acpi_sdt_header_t header;
-    uintptr_t other_sdt[0];
+    uint32_t other_sdt[0];
 } __attribute__((packed)) rsdt_t;
 typedef struct madt {
     acpi_sdt_header_t header;
-    uintptr_t lapic_pa;
+    uint32_t lapic_pa;
     uint32_t flags;
     uint8_t entries[0];
 } __attribute__((packed)) madt_t;
@@ -58,7 +58,7 @@ static acpi_info_t parse_madt(madt_t const* madt)
             goto end;
         case 1:
             // ioapic
-            info.ioapic_addr = *(uintptr_t*)(&p[4]);
+            info.ioapic_addr = *(uint32_t*)(&p[4]);
             info.ioapic_id = p[2];
             goto end;
         end:
@@ -71,7 +71,7 @@ static acpi_info_t parse_madt(madt_t const* madt)
     return info;
 }
 
-acpi_info_t init_acpi(void const* __rsdp)
+acpi_info_t parse_acpi(void const* __rsdp, virt_addr_t* mapping_addr_ptr)
 {
     rsdp_t const* rsdp = __rsdp;
     if (rsdp == NULL
@@ -81,9 +81,17 @@ acpi_info_t init_acpi(void const* __rsdp)
         PANIC("Bad RSDP");
     }
 
-    // uintptr_t table_pa = rsdp->rsdt_pa;
-    // TODO wtf is the size here?? need unmap_pa
-    rsdt_t* rsdt = NULL; // map_phy(table_pa, -1, 0);
+    virt_addr_t mapping_addr = *mapping_addr_ptr;
+
+    phys_addr_t table_pa = rsdp->rsdt_pa;
+    phys_addr_t table_frame = PTE_FRAME(table_pa);
+    int err = paging_map(mapping_addr, table_frame, PAGE_4KiB, PTE_P);
+    if (err != PAGING_OK)
+        PANIC("Unable to map rsdt");
+    rsdt_t* rsdt = mapping_addr + PAGE_OFF(table_pa);
+
+    mapping_addr += PAGE_SIZE;
+    size_t rsdt_length = rsdt->header.len;
 
     uint8_t sum;
     if (memcmp(rsdt->header.sign, "RSDT", 4) != 0 || (sum = memsum(rsdt, rsdt->header.len) != 0))
@@ -96,20 +104,33 @@ acpi_info_t init_acpi(void const* __rsdp)
     else
         PANIC("No ACPI tables found");
 
-    acpi_info_t ret;
+    acpi_info_t ret = { 0 };
 
     for (size_t i = 0; i < nr_rsdt_entries; ++i) {
-        uintptr_t table_pa = rsdt->other_sdt[i];
-        // TODO wtf is the size here?? need unmap_pa
-        acpi_sdt_header_t* h = NULL; // map_phy(table_pa, -1, 0);
+        phys_addr_t table_pa = rsdt->other_sdt[i];
 
-        printf(" ");
-        for (int j = 0; j < 4; ++j)
-            printf("%c", h->sign[j]);
+        phys_addr_t table_frame = PTE_FRAME(table_pa);
+        int err = paging_map(mapping_addr, table_frame, PAGE_4KiB, PTE_P);
+        if (err != PAGING_OK)
+            PANIC("Unable to map acpi table");
+        acpi_sdt_header_t* h = mapping_addr + PAGE_OFF(table_pa);
+
+        mapping_addr += PAGE_SIZE;
+
+        char name[5] = { 0 };
+        memcpy(name, h->sign, 4);
+        printf(" %s", name);
+
         if (memsum(h, h->len) == 0 && !memcmp(h->sign, "APIC", 4))
             ret = parse_madt((void*)h);
     }
     printf("]\n");
+
+    for (virt_addr_t m = *mapping_addr_ptr; m < mapping_addr; m += PAGE_SIZE) {
+        int err = paging_unmap(m, PAGE_4KiB);
+        if ((err & ~PAGING_ERROR) == 0)
+            PANIC("Unable to unmap rsdt");
+    }
 
     return ret;
 }

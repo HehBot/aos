@@ -38,10 +38,9 @@ static void ioapic_write(uint8_t reg, uint32_t data)
     ioapic->data = data;
 }
 
-void init_ioapic(uintptr_t addr, uint8_t id)
+void init_ioapic(void* addr, uint8_t id)
 {
-    // ioapic = map_phy(addr, sizeof(*ioapic), PTE_W);
-    ioapic = (void*)addr;
+    ioapic = addr;
     ioapic_id = id;
 
     uint8_t z = (ioapic_read(IOAPIC_ID) >> 24);

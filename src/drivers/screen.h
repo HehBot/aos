@@ -24,7 +24,7 @@
 
 struct multiboot_tag_framebuffer;
 
-virt_addr_t init_screen(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t addr_to_use_for_mapping);
+void init_screen(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t* mapping_addr_ptr);
 void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_t bg_color);
 void clear_screen();
 

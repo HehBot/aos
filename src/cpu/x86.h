@@ -15,11 +15,11 @@ static inline _Noreturn void HALT()
     asm("cli; hlt");
     __builtin_unreachable();
 }
-    #define PANIC(str)                                       \
-        do {                                                 \
-            printf("PANIC at function %s in file %s:%d\n%s", \
-                   __func__, __FILE__, __LINE__, str);       \
-            HALT();                                          \
+    #define PANIC(str)                                         \
+        do {                                                   \
+            printf("\nPANIC at function %s in file %s:%d\n%s", \
+                   __func__, __FILE__, __LINE__, str);         \
+            HALT();                                            \
         } while (0)
 
     // EFLAGS
@@ -126,6 +126,8 @@ typedef union gdt_entry {
     } __attribute__((packed));
 } __attribute__((packed)) gdt_entry_t;
     #define GDT_STRIDE (sizeof(gdt_entry_t))
+
+    #define DOUBLE_FAULT_IST 0
 
 typedef struct tss {
     uint32_t : 32;

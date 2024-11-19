@@ -26,12 +26,16 @@ static inline void set_idt_entry(size_t n, void (*isr)(void), uint8_t gate_type,
     };
 }
 
-void init_idt(uint8_t double_fault_ist)
+void init_idt()
 {
     for (size_t i = 0; i < NR_ISRS; ++i)
         set_idt_entry(i, isrs[i], GATE_TYPE_INT, KERNEL_PL, 0);
-    set_idt_entry(T_DOUBLE_FAULT, isrs[T_DOUBLE_FAULT], GATE_TYPE_INT, KERNEL_PL, double_fault_ist + 1);
+    set_idt_entry(T_DOUBLE_FAULT, isrs[T_DOUBLE_FAULT], GATE_TYPE_INT, KERNEL_PL, DOUBLE_FAULT_IST + 1);
     set_idt_entry(T_SYSCALL, isrs[T_SYSCALL], GATE_TYPE_TRAP, USER_PL, 0);
+}
+
+void load_idt()
+{
     lidt(&idt[0], sizeof(idt));
 }
 

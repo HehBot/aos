@@ -6,10 +6,11 @@
 #include <stdint.h>
 
 typedef struct {
-    uint8_t acpi_proc_id;
-    uint8_t lapic_id;
     gdt_entry_t gdt[NR_GDT_ENTRIES];
     tss_t tss;
+    uint8_t acpi_proc_id;
+    uint8_t lapic_id;
+    uint8_t ist_stack[512];
 } cpu_t;
 
 #define MAX_CPUS 32
@@ -19,9 +20,9 @@ extern size_t nr_cpus;
 cpu_t* get_cpu(void);
 uint8_t cpu_id(void);
 
-void init_lapic(uintptr_t lapic_addr);
-void init_seg(void);
-
+void init_lapic(void* lapic_addr);
 void lapic_eoi(void);
+
+void init_cpu(void);
 
 #endif // MP_H

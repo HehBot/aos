@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-void init_ioapic(uintptr_t addr, uint8_t id);
+void init_ioapic(void* addr, uint8_t id);
 void ioapic_enable(uint8_t irq, uint8_t cpu_lapic_id);
 
 #endif // IOAPIC_H

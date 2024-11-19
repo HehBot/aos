@@ -49,6 +49,9 @@ void init_paging()
         PANIC("Paging buffer page is already mapped");
     *pte = PTE(phys_addr_of_kernel_static(&map_temp_p1), PTE_W | PTE_P);
 
+    /*
+     * remove kernel identity mapping
+     */
     p4->entries[0] = init_p3->entries[0] = 0;
 
     flush_tlb_all();
