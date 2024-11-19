@@ -1,5 +1,5 @@
-#include "kwmalloc.h"
-#include "mm.h"
+#include "kalloc.h"
+#include "paging.h"
 
 #include <cpu/x86.h>
 #include <stddef.h>

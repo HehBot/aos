@@ -1,7 +1,5 @@
-// Physical memory manager
-
-#include "kwmalloc.h"
-#include "mem/page.h"
+#include "kalloc.h"
+#include "page.h"
 
 #include <cpu/x86.h>
 #include <multiboot2.h>

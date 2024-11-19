@@ -1,4 +1,4 @@
-#include <mem/kpalloc.h>
+#include <memory/kalloc.h>
 #include <stddef.h>
 
 int liballoc_lock()

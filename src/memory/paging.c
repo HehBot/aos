@@ -1,8 +1,8 @@
+#include "frame_allocator.h"
+#include "kalloc.h"
+#include "page.h"
+
 #include <cpu/x86.h>
-#include <liballoc.h>
-#include <mem/kpalloc.h>
-#include <mem/page.h>
-#include <mem/pmm.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>

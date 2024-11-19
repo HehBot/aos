@@ -2,7 +2,7 @@
 
 #include <cpu/port.h>
 #include <cpu/x86.h>
-#include <mem/mm.h>
+#include <memory/paging.h>
 #include <multiboot2.h>
 #include <stddef.h>
 #include <stdint.h>

@@ -25,10 +25,16 @@ DISK := $(BUILD_DIR)/disk.img
 BOOTDISK := $(BUILD_DIR)/bootdisk.img
 BOOTCDROM := $(BUILD_DIR)/bootcdrom.iso
 
-INC_FLAGS = -I$(SRC_DIR)/ -I$(SRC_DIR)/util -I$(SRC_DIR)/util/liballoc
+INC_FLAGS = -I$(SRC_DIR) -I$(SRC_DIR)/util
 
 ASMFLAGS := -c -g
-CFLAGS := -c -g -Wall -Wextra -Werror -ffreestanding -fno-asynchronous-unwind-tables -nostdlib -mno-red-zone -MMD -MP $(INC_FLAGS) -Wno-unused-variable
+CFLAGS := -c -g \
+		  -Wall -Wextra -Werror -Wno-unused-variable \
+		  -ffreestanding -fno-asynchronous-unwind-tables \
+		  -mno-red-zone \
+		  -nostdlib \
+		  -MMD -MP \
+		  $(INC_FLAGS)
 LDFLAGS := -T linker.ld
 
 EMU_FLAGS := -smp cpus=4,cores=1,threads=1,sockets=4
@@ -41,7 +47,7 @@ run_disk: $(BOOTDISK)
 
 debug: $(BOOTCDROM) $(KERNEL)
 	$(EMU) -s -S $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw &
-	$(GDB) -ex "target remote tcp::1234" -ex "symbol-file $(KERNEL)"
+	$(GDB) "$(KERNEL)" -ex "target remote tcp::1234"
 
 disk: $(DISK)
 bootcdrom: $(BOOTCDROM)

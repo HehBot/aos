@@ -1,7 +1,7 @@
 #include "port.h"
 #include "x86.h"
 
-#include <mem/mm.h>
+#include <memory/paging.h>
 #include <stdio.h>
 
 // Taken from xv6:lapic.c

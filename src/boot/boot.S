@@ -1,5 +1,5 @@
 #include <cpu/x86.h>
-#include <mem/page.h>
+#include <memory/page.h>
 #define ASM_FILE
 #include <multiboot2.h>
 

@@ -1,5 +1,5 @@
 #include <cpu/x86.h>
-#include <mem/page.h>
+#include <memory/page.h>
 
 .globl long_mode_start
 .extern main

@@ -2,7 +2,7 @@
 // Written for JamesM's kernel development tutorials.
 
 #include <fs/initrd.h>
-#include <liballoc.h>
+#include <memory/kalloc.h>
 #include <string.h>
 
 initrd_header_t* initrd_header; // The header.

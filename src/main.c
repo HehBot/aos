@@ -7,11 +7,8 @@
 #include <fs/fs.h>
 #include <fs/initrd.h>
 #include <hash_table.h>
-#include <liballoc.h>
-#include <mem/kpalloc.h>
-#include <mem/kwmalloc.h>
-#include <mem/mm.h>
-#include <mem/pmm.h>
+#include <memory/frame_allocator.h>
+#include <memory/kalloc.h>
 #include <multiboot2.h>
 #include <stddef.h>
 #include <stdint.h>

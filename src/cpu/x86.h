@@ -214,8 +214,8 @@ static inline void ltr(uint16_t tss_seg)
 #define CR0_PG 0x80000000
 
 #ifndef __ASSEMBLER__
-    #include <mem/mm.h>
-    #include <mem/page.h>
+    // #include <mem/mm.h>
+    #include <memory/page.h>
 static inline void invlpg(virt_addr_t va)
 {
     asm("invlpg (%0)" ::"r"(va)

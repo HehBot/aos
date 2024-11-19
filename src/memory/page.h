@@ -37,6 +37,9 @@ typedef enum page_table_level {
     PAGE_TABLE_P4,
 } page_table_level_t;
 
+typedef uintptr_t phys_addr_t;
+typedef void* virt_addr_t;
+
     #define PAGE_ORDER 12
     #define HUGE_PAGE_ORDER (12 + 9)
     #define GIANT_PAGE_ORDER (12 + 9 + 9)

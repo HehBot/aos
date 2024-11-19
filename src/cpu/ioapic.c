@@ -1,6 +1,6 @@
 #include "mp.h"
 
-#include <mem/mm.h>
+#include <memory/paging.h>
 #include <stdint.h>
 #include <stdio.h>
 

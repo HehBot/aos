@@ -2,7 +2,7 @@
 
 #include <cpu/ioapic.h>
 #include <cpu/mp.h>
-#include <mem/mm.h>
+#include <memory/paging.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>

@@ -1,7 +1,7 @@
 #include <cpu/interrupt.h>
 #include <cpu/port.h>
 #include <cpu/x86.h>
-#include <mem/pmm.h>
+#include <memory/frame_allocator.h>
 #include <stdint.h>
 #include <stdio.h>
 
