@@ -156,7 +156,8 @@ static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sectio
             phys_addr_t first_frame = phys_addr_of_kernel_static((virt_addr_t)PAGE_ROUND_DOWN(section->addr));
             phys_addr_t last_frame = phys_addr_of_kernel_static((virt_addr_t)PAGE_ROUND_DOWN(section->addr + section->size - 1));
             for (phys_addr_t p = first_frame; p <= last_frame; p += PAGE_SIZE)
-                pmm_reserve_frame(p);
+                if (frame_allocator_reserve_frame(p) != FRAME_ALLOCATOR_OK)
+                    PANIC("Unable to reserve kernel frames");
         }
     }
 }
@@ -165,7 +166,8 @@ void main(phys_addr_t phys_addr_mboot_info)
 {
     struct multiboot_info mboot_info = parse_mboot_info(kernel_static_from_phys_addr(phys_addr_mboot_info));
 
-    init_screen(mboot_info.tag_framebuffer, 1);
+    init_screen(mboot_info.tag_framebuffer, NULL);
+    clear_screen();
     printf("Hello from C!\n");
 
     /*
@@ -191,16 +193,20 @@ void main(phys_addr_t phys_addr_mboot_info)
     if (section_info[0].section == NULL)
         PANIC("No text section");
 
-    init_pmm(mboot_info.tag_mmap);
+    init_frame_allocator(mboot_info.tag_mmap);
     reserve_kernel_frames(section_info, nr_sections);
     /*
      * reserve multiboot info frames
      */
     for (phys_addr_t p = PAGE_ROUND_DOWN(phys_addr_mboot_info); p <= PAGE_ROUND_DOWN(phys_addr_mboot_info + mboot_info.size_reserved); p += PAGE_SIZE)
-        pmm_reserve_frame(p);
+        if (frame_allocator_reserve_frame(p) != FRAME_ALLOCATOR_OK)
+            PANIC("Unable to reserve multiboot info frames");
 
     init_paging();
-    init_screen(mboot_info.tag_framebuffer, 0);
+
+    virt_addr_t mmio_devices = (virt_addr_t)0x2000000;
+
+    mmio_devices = init_screen(mboot_info.tag_framebuffer, mmio_devices);
 
     // acpi_info_t acpi_info = init_acpi(mboot_info.tag_old_acpi->rsdp);
     // TODO reclaim MULTIBOOT_MEMORY_ACPI_RECLAIMABLE entries
@@ -213,15 +219,16 @@ void main(phys_addr_t phys_addr_mboot_info)
 
     /*
      * all required frames have been reserved
-     * now we can safely use pmm_get_frame
+     * now we can safely use frame_allocator_get_frame
      */
 
     virt_addr_t heap_start = (virt_addr_t)0xffff800000000000;
     size_t heap_size = 0x200000;
     for (size_t i = 0; i < heap_size / PAGE_SIZE; ++i) {
-        phys_addr_t frame = pmm_get_frame();
-        map_to(heap_start + i * PAGE_SIZE, frame, PTE_W | PTE_P);
-        printf("%lu %p\n", i, heap_start + i * PAGE_SIZE);
+        phys_addr_t frame = frame_allocator_get_frame();
+        if (frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
+            PANIC("Unable to allocate frames for heap");
+        map_to(heap_start + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_W | PTE_P);
     }
 
     for (size_t i = 0; i < heap_size / PAGE_SIZE; ++i) {

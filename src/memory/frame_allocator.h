@@ -7,13 +7,22 @@
 
 struct multiboot_tag_mmap;
 
-void init_pmm(struct multiboot_tag_mmap const* mmap_info);
-int pmm_reserve_frame(phys_addr_t phys_addr);
-phys_addr_t pmm_get_frame();
-int pmm_free_frame(phys_addr_t phys_addr);
+void init_frame_allocator(struct multiboot_tag_mmap const* mmap_info);
 
-// int pmm_reserve_large_frame(uintptr_t phys_addr);
-// uintptr_t pmm_get_large_frame();
-// int pmm_free_large_frame(uintptr_t phys_addr);
+enum {
+    FRAME_ALLOCATOR_OK = 0,
+    FRAME_ALLOCATOR_ERROR_ALREADY_TAKEN,
+    FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME,
+    FRAME_ALLOCATOR_ERROR_ALREADY_FREED,
+    FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE,
+};
+
+int frame_allocator_reserve_frame(phys_addr_t phys_addr);
+phys_addr_t frame_allocator_get_frame();
+int frame_allocator_free_frame(phys_addr_t phys_addr);
+
+// int frame_allocator_reserve_large_frame(uintptr_t phys_addr);
+// uintptr_t frame_allocator_get_large_frame();
+// int frame_allocator_free_large_frame(uintptr_t phys_addr);
 
 #endif // FRAME_ALLOCATOR_H

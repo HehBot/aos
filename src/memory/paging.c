@@ -19,9 +19,7 @@ static page_table_t* p4;
 virt_addr_t map_temp(phys_addr_t pa)
 {
     map_temp_p1.entries[VA_P1_INDEX(buf_page)] = PTE(pa, PTE_W | PTE_P);
-
     flush_tlb(buf_page);
-
     return buf_page;
 }
 
@@ -32,16 +30,19 @@ void init_paging()
         || VA_P3_INDEX(&KERN_BASE) != VA_P3_INDEX(buf_page))
         PANIC("Bad buf_page address");
 
+    /*
+     * we don't reserve frames here
+     * since they are already reserved
+     * as part of kernel frames
+     */
+
     phys_addr_t phys_addr_p4 = read_cr3();
-    pmm_reserve_frame(phys_addr_p4);
     p4 = kernel_static_from_phys_addr(phys_addr_p4);
 
     phys_addr_t phys_addr_init_p3 = PTE_FRAME(p4->entries[VA_P4_INDEX(&KERN_BASE)]);
-    pmm_reserve_frame(phys_addr_init_p3);
     page_table_t* init_p3 = kernel_static_from_phys_addr(phys_addr_init_p3);
 
     phys_addr_t phys_addr_init_p2 = PTE_FRAME(init_p3->entries[VA_P3_INDEX(&KERN_BASE)]);
-    pmm_reserve_frame(phys_addr_init_p2);
     page_table_t* init_p2 = kernel_static_from_phys_addr(phys_addr_init_p2);
 
     pte_t* pte = &init_p2->entries[VA_P2_INDEX(buf_page)];
@@ -78,15 +79,11 @@ page_table_t* page_walk(virt_addr_t addr, page_table_level_t level)
     return curr_page_table;
 }
 
-int map_to_with_table_flags(virt_addr_t page, phys_addr_t frame, pte_flags_t flags, pte_flags_t parent_table_flags)
+int map_to_with_table_flags(virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags, pte_flags_t parent_table_flags)
 {
-    virt_addr_t addr = page;
+    page_table_level_t parent_level = page_type_parent_table_level(type);
 
-    page_table_level_t parent_level = PAGE_TABLE_P1;
-
-    /*
     parent_table_flags &= ~PTE_HP;
-    */
 
     page_table_level_t curr_level = PAGE_TABLE_P4;
     page_table_t* curr_page_table = p4;
@@ -96,14 +93,23 @@ int map_to_with_table_flags(virt_addr_t page, phys_addr_t frame, pte_flags_t fla
 
         int clear = 0;
 
-        pte_t* pte = &curr_page_table->entries[VA_PT_INDEX(addr, curr_level)];
+        pte_t* pte = &curr_page_table->entries[VA_PT_INDEX(page, curr_level)];
         if (((*pte) & PTE_P) == 0) {
-            phys_addr_t new_frame = pmm_get_frame(); // frame allocation failure
+            phys_addr_t new_frame = frame_allocator_get_frame();
+            if (new_frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE) {
+                /*
+                 * XXX frame allocation failure
+                 */
+                return 0;
+            };
             *pte = PTE(new_frame, (parent_table_flags | PTE_P | PTE_W));
             clear = 1;
-        } /* else if ((*pte) & PTE_HP)   // parent entry is huge page
-             return 0;
-         */
+        } else if ((*pte) & PTE_HP) {
+            /*
+             * XXX parent entry is huge page
+             */
+            return 0;
+        }
 
         phys_addr_t pa = PTE_FRAME(*pte);
         curr_page_table = map_temp(pa);
@@ -112,17 +118,21 @@ int map_to_with_table_flags(virt_addr_t page, phys_addr_t frame, pte_flags_t fla
 
         curr_level--;
     }
-    pte_t* pte = &curr_page_table->entries[VA_PT_INDEX(addr, parent_level)];
-    if ((*pte) & PTE_P) // page is already mapped
+    pte_t* pte = &curr_page_table->entries[VA_PT_INDEX(page, parent_level)];
+    if ((*pte) & PTE_P) {
+        /*
+         * XXX page is already mapped
+         */
         return 0;
-    *pte = PTE(frame, flags | PTE_P);
+    }
 
+    *pte = PTE(frame, flags | PTE_P | (type == PAGE_4KiB ? 0 : PTE_HP));
     flush_tlb(page);
 
     return 1;
 }
 
-int map_to(virt_addr_t page, phys_addr_t frame, pte_flags_t flags)
+int map_to(virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags)
 {
-    return map_to_with_table_flags(page, frame, flags, PTE_W | PTE_P);
+    return map_to_with_table_flags(page, frame, type, flags, PTE_W | PTE_P);
 }

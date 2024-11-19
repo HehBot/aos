@@ -17,29 +17,28 @@ static uint8_t* vid_mem;
 static size_t screen_rows;
 static size_t screen_cols;
 
-void init_screen(struct multiboot_tag_framebuffer const* fbinfo, int identmap)
+virt_addr_t init_screen(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t addr_to_use_for_mapping)
 {
     struct multiboot_tag_framebuffer_common const* common = &fbinfo->common;
 
     size_t fb_size = (common->framebuffer_width * (common->framebuffer_height + 1) * (common->framebuffer_bpp >> 3));
 
-    extern void* KERN_BASE;
-
-    if (identmap) {
+    if (addr_to_use_for_mapping == NULL)
         vid_mem = (uint8_t*)common->framebuffer_addr;
-    } else {
-        // vid_mem = map_phy(common->framebuffer_addr, fb_size, PTE_W);
-        // vid_mem = (uint8_t*)common->framebuffer_addr;
-        pmm_reserve_frame(common->framebuffer_addr);
-
-        vid_mem = (virt_addr_t)0x2000000;
-
-        map_to(vid_mem, common->framebuffer_addr, PTE_W | PTE_P);
+    else {
+        vid_mem = addr_to_use_for_mapping;
+        for (size_t i = 0; i < fb_size; i += PAGE_SIZE, addr_to_use_for_mapping += PAGE_SIZE) {
+            int err = frame_allocator_reserve_frame(common->framebuffer_addr + i);
+            if (err != FRAME_ALLOCATOR_OK && err != FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME)
+                PANIC("Unable to reserve framebuffer frames");
+            map_to(addr_to_use_for_mapping, common->framebuffer_addr, PAGE_4KiB, PTE_W | PTE_P);
+        }
     }
 
     screen_rows = common->framebuffer_height;
     screen_cols = common->framebuffer_width;
-    clear_screen();
+
+    return addr_to_use_for_mapping;
 }
 
 static inline size_t get_screen_offset(size_t cols, size_t rows)

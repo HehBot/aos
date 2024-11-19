@@ -1,3 +1,4 @@
+#include "frame_allocator.h"
 #include "kalloc.h"
 #include "page.h"
 
@@ -22,7 +23,7 @@ static section_t* sections = NULL;
 /*
  * tell physical memory manager about available regions of RAM
  */
-static void pmm_add_physical(phys_addr_t addr, uint64_t len)
+static void add_physical_memory_region(phys_addr_t addr, uint64_t len)
 {
     section_t* z = kwmalloc(sizeof(*z));
     _Static_assert((1 << (LOG_ENTRY_BITWIDTH)) == ENTRY_BITWIDTH, "Bad bitmap entry width");
@@ -43,20 +44,20 @@ static void pmm_add_physical(phys_addr_t addr, uint64_t len)
     }
 }
 
-void init_pmm(struct multiboot_tag_mmap const* mmap_info)
+void init_frame_allocator(struct multiboot_tag_mmap const* mmap_info)
 {
     struct multiboot_mmap_entry const* mmap_entries = &mmap_info->entries[0];
     size_t nr_entries = (mmap_info->size - sizeof(*mmap_info)) / sizeof(mmap_info->entries[0]);
 
     for (size_t i = 0; i < nr_entries; ++i)
         if (mmap_entries[i].type == MULTIBOOT_MEMORY_AVAILABLE)
-            pmm_add_physical(mmap_entries[i].addr, mmap_entries[i].len);
+            add_physical_memory_region(mmap_entries[i].addr, mmap_entries[i].len);
 }
 
 /*
  * set frame containing this physical address to occupied
  */
-int pmm_reserve_frame(phys_addr_t addr)
+int frame_allocator_reserve_frame(phys_addr_t addr)
 {
     section_t* p = sections;
     phys_addr_t frame = PAGE_ROUND_DOWN(addr);
@@ -74,20 +75,20 @@ int pmm_reserve_frame(phys_addr_t addr)
 
             uint8_t bit = ((*entry) >> bit_index_in_entry) & 1;
             if (bit)
-                return 0;
+                return FRAME_ALLOCATOR_ERROR_ALREADY_TAKEN;
 
             *entry |= (1 << bit_index_in_entry);
-            return 1;
+            return FRAME_ALLOCATOR_OK;
         }
         p = p->next;
     } while (p != sections);
-    return 0;
+    return FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME;
 }
 
 /*
  * set large frame containing this physical address to occupied
  */
-// int pmm_reserve_large_frame(phys_addr_t addr)
+// int frame_allocator_reserve_large_frame(phys_addr_t addr)
 // {
 //     addr = LPG_ROUND_DOWN(addr);
 //     section_t* p = sections;
@@ -110,7 +111,7 @@ int pmm_reserve_frame(phys_addr_t addr)
 /*
  * free frame
  */
-phys_addr_t pmm_get_frame()
+phys_addr_t frame_allocator_get_frame()
 {
     section_t* p = sections;
     do {
@@ -137,13 +138,13 @@ phys_addr_t pmm_get_frame()
         }
         p = p->next;
     } while (p != sections);
-    PANIC("Out of frames!");
+    return FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE;
 }
 
 /*
  * get large frame
  */
-// phys_addr_t pmm_get_large_frame()
+// phys_addr_t frame_allocator_get_large_frame()
 // {
 //     section_t* p = sections;
 //     do {
@@ -170,7 +171,7 @@ phys_addr_t pmm_get_frame()
 /*
  * free large frame
  */
-int pmm_free_frame(phys_addr_t addr)
+int frame_allocator_free_frame(phys_addr_t addr)
 {
     section_t* p = sections;
     phys_addr_t frame = PAGE_ROUND_DOWN(addr);
@@ -188,17 +189,17 @@ int pmm_free_frame(phys_addr_t addr)
 
             uint8_t bit = ((*entry) >> bit_index_in_entry) & 1;
             if (!bit)
-                return 0;
+                return FRAME_ALLOCATOR_ERROR_ALREADY_FREED;
 
             *entry ^= (1 << bit_index_in_entry);
             return 1;
         }
         p = p->next;
     } while (p != sections);
-    return 0;
+    return FRAME_ALLOCATOR_OK;
 }
 
-// int pmm_free_large_frame(phys_addr_t addr)
+// int frame_allocator_free_large_frame(phys_addr_t addr)
 // {
 //     addr = LPG_ROUND_DOWN(addr);
 //     section_t* p = sections;

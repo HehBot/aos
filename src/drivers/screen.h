@@ -1,6 +1,7 @@
 #ifndef SCREEN_H
 #define SCREEN_H
 
+#include <memory/page.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -23,7 +24,7 @@
 
 struct multiboot_tag_framebuffer;
 
-void init_screen(struct multiboot_tag_framebuffer const* fbinfo, int virtmap);
+virt_addr_t init_screen(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t addr_to_use_for_mapping);
 void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_t bg_color);
 void clear_screen();
 
