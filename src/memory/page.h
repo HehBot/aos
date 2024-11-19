@@ -9,6 +9,8 @@
 
 #else
 
+    #define noignore __attribute__((warn_unused_result))
+
     #include <stddef.h>
     #include <stdint.h>
 

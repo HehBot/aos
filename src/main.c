@@ -228,7 +228,9 @@ void main(phys_addr_t phys_addr_mboot_info)
         phys_addr_t frame = frame_allocator_get_frame();
         if (frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
             PANIC("Unable to allocate frames for heap");
-        map_to(heap_start + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_W | PTE_P);
+        int err = map_to(heap_start + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_W | PTE_P);
+        if (err != PAGING_OK)
+            PANIC("Unable to map heap");
     }
 
     for (size_t i = 0; i < heap_size / PAGE_SIZE; ++i) {

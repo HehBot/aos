@@ -31,7 +31,9 @@ virt_addr_t init_screen(struct multiboot_tag_framebuffer const* fbinfo, virt_add
             int err = frame_allocator_reserve_frame(common->framebuffer_addr + i);
             if (err != FRAME_ALLOCATOR_OK && err != FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME)
                 PANIC("Unable to reserve framebuffer frames");
-            map_to(addr_to_use_for_mapping, common->framebuffer_addr, PAGE_4KiB, PTE_W | PTE_P);
+            err = map_to(addr_to_use_for_mapping, common->framebuffer_addr, PAGE_4KiB, PTE_W | PTE_P);
+            if (err != PAGING_OK)
+                PANIC("Unable to map framebuffer frames");
         }
     }
 
