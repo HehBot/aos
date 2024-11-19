@@ -216,23 +216,31 @@ static inline void ltr(uint16_t tss_seg)
 #ifndef __ASSEMBLER__
     // #include <mem/mm.h>
     #include <memory/page.h>
-static inline void invlpg(virt_addr_t va)
+static inline void write_cr3(phys_addr_t p4_phys_addr)
 {
-    asm("invlpg (%0)" ::"r"(va)
-        : "memory");
+    asm("mov %q0, %%cr3" ::"r"(p4_phys_addr) : "memory");
 }
-static inline void lcr3(phys_addr_t pgdir_phys_addr)
+static inline phys_addr_t read_cr3()
 {
-    asm("movq %0, %%cr3" ::"r"(pgdir_phys_addr)
-        : "memory");
+    phys_addr_t p4_phys_addr;
+    asm("mov %%cr3, %q0" : "=r"(p4_phys_addr)::"memory");
+    return p4_phys_addr;
 }
-static inline virt_addr_t rcr2(void)
+static inline virt_addr_t read_cr2(void)
 {
     virt_addr_t pa = NULL;
     asm("movq %%cr2, %0"
         : "=r"(pa)
         :);
     return pa;
+}
+static inline void flush_tlb(virt_addr_t va)
+{
+    asm("invlpg (%q0)" ::"r"(va) : "memory");
+}
+static inline void flush_tlb_all()
+{
+    write_cr3(read_cr3());
 }
 
 #endif // __ASSEMBLER__

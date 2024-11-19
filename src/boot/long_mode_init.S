@@ -41,8 +41,7 @@ long_mode_start:
         movabs $0x2f592f412f4b2f4f, %rax
         mov %rax, 0xb8000
 
-        call main
-        hlt
+        jmp main
 
 
 /*

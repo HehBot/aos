@@ -107,7 +107,7 @@ void excep(cpu_state_t* cpu_state)
         break;
     case 14:
         // https://wiki.osdev.org/Exceptions#Page_Fault
-        printf("At address %p: ", rcr2());
+        printf("At address %p: ", read_cr2());
         if (err_code & PTE_P)
             printf("protection violation");
         else

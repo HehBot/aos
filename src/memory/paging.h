@@ -12,7 +12,10 @@
 
 // void* map_phy(uintptr_t pa, size_t len, uint8_t flags);
 
-void init_mm(void);
+void init_paging();
+
+int map_to_with_table_flags(virt_addr_t page, phys_addr_t frame, pte_flags_t flags, pte_flags_t parent_table_flags);
+int map_to(virt_addr_t page, phys_addr_t frame, pte_flags_t flags);
 
 static inline phys_addr_t phys_addr_of_kernel_static(virt_addr_t v)
 {

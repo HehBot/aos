@@ -11,6 +11,9 @@
 
     #include <stdint.h>
 
+typedef uintptr_t phys_addr_t;
+typedef void* virt_addr_t;
+
 typedef uint64_t pte_t;
 typedef enum pte_flags {
     PTE_P = 0x001,
@@ -20,25 +23,27 @@ typedef enum pte_flags {
     PTE_NX = 0x8000000000000000,
 } pte_flags_t;
 
+    #define PTE(pa, flags) ((pa) | (flags))
     #define NR_PTE_ENTRIES (PAGE_SIZE / sizeof(pte_t))
 
-    #define PA_FRAME(x) ((x) & 0xfffffffffffff000)
-
-    #define PAGE_OFF(x) ((x) & 0xfff)
-    #define VA_P1_INDEX(x) ((x >> 12) & 0o777)
-    #define VA_P2_INDEX(x) ((x >> 21) & 0o777)
-    #define VA_P3_INDEX(x) ((x >> 30) & 0o777)
-    #define VA_P4_INDEX(x) ((x >> 39) & 0o777)
+    #define PTE_FRAME(x) ((x) & 0xfffffffffffff000)
 
 typedef enum page_table_level {
-    PAGE_TABLE_P1,
-    PAGE_TABLE_P2,
-    PAGE_TABLE_P3,
-    PAGE_TABLE_P4,
+    PAGE_TABLE_P1 = 1,
+    PAGE_TABLE_P2 = 2,
+    PAGE_TABLE_P3 = 3,
+    PAGE_TABLE_P4 = 4,
 } page_table_level_t;
 
-typedef uintptr_t phys_addr_t;
-typedef void* virt_addr_t;
+    #define PAGE_OFF(x) (((uintptr_t)(x)) & 0xfff)
+static inline uint16_t VA_PT_INDEX(virt_addr_t addr, page_table_level_t level)
+{
+    return (((uintptr_t)addr) >> (12 + 9 * (level - 1))) & 0x1ff;
+}
+    #define VA_P1_INDEX(x) VA_PT_INDEX((x), PAGE_TABLE_P1)
+    #define VA_P2_INDEX(x) VA_PT_INDEX((x), PAGE_TABLE_P2)
+    #define VA_P3_INDEX(x) VA_PT_INDEX((x), PAGE_TABLE_P3)
+    #define VA_P4_INDEX(x) VA_PT_INDEX((x), PAGE_TABLE_P4)
 
     #define PAGE_ORDER 12
     #define HUGE_PAGE_ORDER (12 + 9)

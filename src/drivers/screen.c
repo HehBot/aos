@@ -2,6 +2,7 @@
 
 #include <cpu/port.h>
 #include <cpu/x86.h>
+#include <memory/frame_allocator.h>
 #include <memory/paging.h>
 #include <multiboot2.h>
 #include <stddef.h>
@@ -22,11 +23,19 @@ void init_screen(struct multiboot_tag_framebuffer const* fbinfo, int identmap)
 
     size_t fb_size = (common->framebuffer_width * (common->framebuffer_height + 1) * (common->framebuffer_bpp >> 3));
 
+    extern void* KERN_BASE;
+
     if (identmap) {
+        vid_mem = (uint8_t*)common->framebuffer_addr;
+    } else {
         // vid_mem = map_phy(common->framebuffer_addr, fb_size, PTE_W);
-        vid_mem = (uint8_t*)common->framebuffer_addr;
-    } else
-        vid_mem = (uint8_t*)common->framebuffer_addr;
+        // vid_mem = (uint8_t*)common->framebuffer_addr;
+        pmm_reserve_frame(common->framebuffer_addr);
+
+        vid_mem = (virt_addr_t)0x2000000;
+
+        map_to(vid_mem, common->framebuffer_addr, PTE_W | PTE_P);
+    }
 
     screen_rows = common->framebuffer_height;
     screen_cols = common->framebuffer_width;

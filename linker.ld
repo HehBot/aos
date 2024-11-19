@@ -8,7 +8,7 @@ SECTIONS
 
     .boot.rodata :
     {
-        *(.multiboot2.header)
+        KEEP(*(.multiboot2.header))
         *(.boot.rodata)
     }
     .boot.bss :

@@ -31,11 +31,11 @@ ASMFLAGS := -c -g
 CFLAGS := -c -g \
 		  -Wall -Wextra -Werror -Wno-unused-variable \
 		  -ffreestanding -fno-asynchronous-unwind-tables \
-		  -mno-red-zone \
+		  -mno-red-zone -mno-sse \
 		  -nostdlib \
 		  -MMD -MP \
 		  $(INC_FLAGS)
-LDFLAGS := -T linker.ld
+LDFLAGS := -T linker.ld --gc-sections
 
 EMU_FLAGS := -smp cpus=4,cores=1,threads=1,sockets=4
 
@@ -80,11 +80,11 @@ $(FS_IMG): .FORCE
 
 $(KERNEL): $(OBJS) linker.ld
 	@mkdir -p $(dir $@)
-	$(LD) $(LDFLAGS) -o $@ $(OBJS)
+	$(LD) $(LDFLAGS) -o $@ $(OBJS) # -flto
 
 $(BUILD_DIR)/%.c.o: %.c
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $< # -O3 -flto -ffat-lto-objects
 
 $(BUILD_DIR)/%.S.o: %.S
 	@mkdir -p $(dir $@)

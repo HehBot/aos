@@ -163,6 +163,11 @@ static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sectio
 
 void main(phys_addr_t phys_addr_mboot_info)
 {
+    struct multiboot_info mboot_info = parse_mboot_info(kernel_static_from_phys_addr(phys_addr_mboot_info));
+
+    init_screen(mboot_info.tag_framebuffer, 1);
+    printf("Hello from C!\n");
+
     /*
      * set up gdt and idt
      */
@@ -170,11 +175,6 @@ void main(phys_addr_t phys_addr_mboot_info)
     init_idt(double_fault_ist);
 
     asm volatile("int3");
-
-    struct multiboot_info mboot_info = parse_mboot_info(kernel_static_from_phys_addr(phys_addr_mboot_info));
-
-    init_screen(mboot_info.tag_framebuffer, 0);
-    printf("Hello from C!\n");
 
     /*
      * get section info from multiboot
@@ -199,20 +199,42 @@ void main(phys_addr_t phys_addr_mboot_info)
     for (phys_addr_t p = PAGE_ROUND_DOWN(phys_addr_mboot_info); p <= PAGE_ROUND_DOWN(phys_addr_mboot_info + mboot_info.size_reserved); p += PAGE_SIZE)
         pmm_reserve_frame(p);
 
-    // init_mm();
-
-    // init_screen(fb_info);
+    init_paging();
+    init_screen(mboot_info.tag_framebuffer, 0);
 
     // acpi_info_t acpi_info = init_acpi(mboot_info.tag_old_acpi->rsdp);
     // TODO reclaim MULTIBOOT_MEMORY_ACPI_RECLAIMABLE entries
 
     // init_lapic(acpi_info.lapic_addr);
     // init_seg(); // needs get_cpu which needs lapic initialised
-    // init_ioapic(acpi_info.ioapic_addr, acpi_info.ioapic_id);
 
+    // init_ioapic(acpi_info.ioapic_addr, acpi_info.ioapic_id);
     // ioapic_enable(IRQ_KBD, get_cpu()->lapic_id);
 
+    /*
+     * all required frames have been reserved
+     * now we can safely use pmm_get_frame
+     */
+
+    virt_addr_t heap_start = (virt_addr_t)0xffff800000000000;
+    size_t heap_size = 0x200000;
+    for (size_t i = 0; i < heap_size / PAGE_SIZE; ++i) {
+        phys_addr_t frame = pmm_get_frame();
+        map_to(heap_start + i * PAGE_SIZE, frame, PTE_W | PTE_P);
+        printf("%lu %p\n", i, heap_start + i * PAGE_SIZE);
+    }
+
+    for (size_t i = 0; i < heap_size / PAGE_SIZE; ++i) {
+        uint64_t* x = heap_start + i * PAGE_SIZE;
+        *x = 0x123456789abcdef0;
+        if (*x != 0x123456789abcdef0)
+            PANIC("read != write");
+    }
+
     printf("Haven't crashed\n");
+
+    while (1)
+        ;
 
     // __sync_synchronize();
     // asm volatile("sti");

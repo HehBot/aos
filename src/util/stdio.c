@@ -43,7 +43,7 @@ static void putint(ssize_t arg, int length, unsigned int base)
     }
 
     char buf[25] = { 0 };
-    size_t i = 0;
+    int i = 0;
     do {
         buf[i++] = l[arg % base];
         arg /= base;
@@ -70,7 +70,7 @@ static void putuint(size_t arg, int length, unsigned int base)
         arg = (unsigned long long int)arg;
     }
 
-    size_t i = 0;
+    int i = 0;
     char buf[25] = { 0 };
     do {
         buf[i++] = l[arg % base];
