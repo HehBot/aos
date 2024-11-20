@@ -1,6 +1,7 @@
 #include "screen.h"
 
 #include <cpu/port.h>
+#include <cpu/spinlock.h>
 #include <cpu/x86.h>
 #include <memory/frame_allocator.h>
 #include <memory/paging.h>
@@ -12,8 +13,9 @@
 #define PORT_SCREEN_CTRL 0x3d4
 #define PORT_SCREEN_DATA 0x3d5
 
+static spinlock_t lock = {};
+static volatile int locking = 0;
 static uint8_t* vid_mem;
-
 static size_t screen_rows;
 static size_t screen_cols;
 
@@ -41,6 +43,11 @@ void init_screen(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t* ma
 
     screen_rows = common->framebuffer_height;
     screen_cols = common->framebuffer_width;
+}
+
+void screen_enable_locking()
+{
+    locking = 1;
 }
 
 static inline size_t get_screen_offset(size_t cols, size_t rows)
@@ -78,7 +85,7 @@ static inline size_t handle_scrolling(size_t offset)
     return offset - shift;
 }
 
-void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_t bg_color)
+static void print_char_unlocked(char character, size_t col, size_t row, uint8_t fg_color, uint8_t bg_color, int move_cursor)
 {
     if (character == '\0')
         return;
@@ -105,15 +112,29 @@ void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_
 
     ++offset;
     offset = handle_scrolling(offset);
-    set_cursor(offset);
+    if (move_cursor)
+        set_cursor(offset);
+}
+
+void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_t bg_color)
+{
+    if (locking)
+        acquire(&lock);
+    print_char_unlocked(character, col, row, fg_color, bg_color, 1);
+    if (locking)
+        release(&lock);
 }
 
 void clear_screen()
 {
+    if (locking)
+        acquire(&lock);
     for (size_t row = 0; row < screen_rows; ++row)
         for (size_t col = 0; col < screen_cols; ++col)
-            print_char(' ', col, row, SCREEN_COLOR_BLACK, SCREEN_COLOR_WHITE);
+            print_char_unlocked(' ', col, row, SCREEN_COLOR_BLACK, SCREEN_COLOR_WHITE, 0);
     set_cursor(get_screen_offset(0, 0));
+    if (locking)
+        release(&lock);
 }
 
 void puts(char const* str)
@@ -124,4 +145,18 @@ void puts(char const* str)
 void putc(char character)
 {
     print_char(character, -1, -1, SCREEN_COLOR_BLACK, SCREEN_COLOR_WHITE);
+}
+
+void __attribute__((format(printf, 1, 2))) PANIC(char const* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+
+    locking = 0;
+    disable_interrupts();
+
+    vprintf(fmt, ap);
+    hlt();
+
+    __builtin_unreachable();
 }

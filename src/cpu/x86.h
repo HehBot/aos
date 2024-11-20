@@ -10,27 +10,20 @@
 
 // General
 #ifndef __ASSEMBLER__
-static inline _Noreturn void HALT()
+static inline void hlt()
 {
-    asm("cli; hlt");
-    __builtin_unreachable();
+    asm("hlt");
 }
-    #define PANIC(str)                                         \
-        do {                                                   \
-            printf("\nPANIC at function %s in file %s:%d\n%s", \
-                   __func__, __FILE__, __LINE__, str);         \
-            HALT();                                            \
-        } while (0)
 
-    // EFLAGS
-    // static inline uint32_t get_eflags(void)
-    // {
-    //     uint32_t eflags;
-    //     asm volatile("pushfl; popl %0"
-    //                  : "=r"(eflags));
-    //     return eflags;
-    // }
-    #define EFLAGS_INT 0x00000200
+_Noreturn __attribute__((format(printf, 1, 2))) void PANIC(char const* fmt, ...);
+
+static inline uint64_t read_rflags(void)
+{
+    uint64_t rflags;
+    asm volatile("pushfq; pop %q0" : "=r"(rflags));
+    return rflags;
+}
+    #define RFLAGS_INT 0x00000200
 
 // IDT
 typedef struct {
@@ -244,6 +237,14 @@ static inline void flush_tlb(virt_addr_t va)
 static inline void flush_tlb_all()
 {
     write_cr3(read_cr3());
+}
+static inline void disable_interrupts()
+{
+    asm volatile("cli");
+}
+static inline void enable_interrupts()
+{
+    asm volatile("sti");
 }
 
 #endif // __ASSEMBLER__

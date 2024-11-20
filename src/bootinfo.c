@@ -3,6 +3,9 @@
 #include <multiboot2.h>
 #include <string.h>
 
+/*
+ * ELF sections tag parsing
+ */
 typedef struct elf_section_header {
     uint32_t name; // Offset into the string table
     uint32_t type; // Section type
@@ -66,6 +69,9 @@ void parse_elf_section_info(struct multiboot_tag_elf_sections const* e, section_
     memcpy(section_info, &si, sizeof(si));
 }
 
+/*
+ * Multiboot info parsing
+ */
 struct multiboot_info parse_mboot_info(void* mboot_info)
 {
     struct multiboot_info info = { 0 };

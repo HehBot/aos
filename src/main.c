@@ -75,32 +75,37 @@ void main(phys_addr_t phys_addr_mboot_info)
      * initialise paging
      */
     init_paging();
+    virt_addr_t heap_start = (virt_addr_t)0x2000000;
 
-    virt_addr_t useful_memory_base = (virt_addr_t)0x2000000;
-    init_screen(mboot_info.tag_framebuffer, &useful_memory_base);
+    init_screen(mboot_info.tag_framebuffer, &heap_start);
 
     /*
      * TODO reclaim MULTIBOOT_MEMORY_ACPI_RECLAIMABLE entries
      */
-    acpi_info_t acpi_info = parse_acpi(mboot_info.tag_old_acpi->rsdp, &useful_memory_base);
+    acpi_info_t acpi_info = parse_acpi(mboot_info.tag_old_acpi->rsdp, &heap_start);
 
-    int err = paging_map(useful_memory_base, acpi_info.lapic_addr, PAGE_4KiB, PTE_W | PTE_P);
+    int err = paging_map(heap_start, acpi_info.lapic_addr, PAGE_4KiB, PTE_W | PTE_P);
     if (err != PAGING_OK)
         printf("Unable to map lapic register");
-    init_lapic(useful_memory_base);
-    useful_memory_base += PAGE_SIZE;
+    init_lapic(heap_start);
+    heap_start += PAGE_SIZE;
 
     init_idt();
     init_cpu(); // needs get_cpu which needs lapic initialised
 
+    /*
+     * now we can start using spinlocks
+     */
+    screen_enable_locking();
+
     asm volatile("int3");
     // asm volatile("int $0x8");
 
-    err = paging_map(useful_memory_base, acpi_info.ioapic_addr, PAGE_4KiB, PTE_W | PTE_P);
+    err = paging_map(heap_start, acpi_info.ioapic_addr, PAGE_4KiB, PTE_W | PTE_P);
     if (err != PAGING_OK)
         printf("Unable to map ioapic register");
-    init_ioapic(useful_memory_base, acpi_info.ioapic_id);
-    useful_memory_base += PAGE_SIZE;
+    init_ioapic(heap_start, acpi_info.ioapic_id);
+    heap_start += PAGE_SIZE;
     ioapic_enable(IRQ_KBD, get_cpu()->lapic_id);
 
     /*
@@ -111,7 +116,6 @@ void main(phys_addr_t phys_addr_mboot_info)
     /*
      * set up kernel heap
      */
-    virt_addr_t heap_start = (virt_addr_t)0xffff800000000000;
     size_t heap_size = 0x200000;
     for (size_t i = 0; i < heap_size / PAGE_SIZE; ++i) {
         phys_addr_t frame = frame_allocator_get_frame();
@@ -125,8 +129,14 @@ void main(phys_addr_t phys_addr_mboot_info)
     printf("Haven't crashed\n");
 
     __sync_synchronize();
-    asm volatile("sti");
+    enable_interrupts();
 
-    while (1)
-        ;
+    while (1) {
+        for (int i = 0; i < 10000; ++i)
+            ;
+        printf("-");
+    }
+
+    while (1) {
+    }
 }

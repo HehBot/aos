@@ -1,8 +1,7 @@
-#include "mp.h"
+#include "x86.h"
 
 #include <memory/paging.h>
 #include <stdint.h>
-#include <stdio.h>
 
 typedef struct {
     uint8_t reg;

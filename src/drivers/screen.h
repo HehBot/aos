@@ -27,6 +27,7 @@ struct multiboot_tag_framebuffer;
 void init_screen(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t* mapping_addr_ptr);
 void print_char(char character, size_t col, size_t row, uint8_t fg_color, uint8_t bg_color);
 void clear_screen();
+void screen_enable_locking();
 
 void puts(char const* str);
 void putc(char character);

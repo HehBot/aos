@@ -2,7 +2,6 @@
 #include "x86.h"
 
 #include <memory/paging.h>
-#include <stdio.h>
 
 // Taken from xv6:lapic.c
 
@@ -68,7 +67,7 @@ void init_lapic(void* lapic_addr)
 
     lapic_write(LAPIC_TIMER, TIMER_PERIODIC | (T_IRQ0 + IRQ_TIMER));
     lapic_write(LAPIC_TDCR, 0x1);
-    lapic_write(LAPIC_TICR, 100000000);
+    lapic_write(LAPIC_TICR, 10000);
 
     lapic_write(LAPIC_LINT0, DISABLE);
     lapic_write(LAPIC_LINT1, DISABLE);

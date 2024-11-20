@@ -84,65 +84,74 @@ void excep(cpu_state_t* cpu_state)
     if (int_no == T_BREAKPOINT)
         return;
 
-    printf("\nPANIC: %s\n", exception_messages[int_no]);
+    char err_code_msg[100];
+    int end = 0;
+    int const len = sizeof(err_code_msg);
+
     switch (int_no) {
     case 13:
         // https://wiki.osdev.org/Exceptions#Selector_Error_Code
         if (err_code != 0) {
             if (err_code & 0x1)
-                printf("External\n");
+                end += snprintf(&err_code_msg[end], len - end, "External");
             else {
-                printf("Internal: ");
+                end += snprintf(&err_code_msg[end], len - end, "Internal: ");
                 switch ((err_code >> 1) & 0x3) {
                 case 0:
-                    printf("GDT");
+                    end += snprintf(&err_code_msg[end], len - end, "GDT");
                     break;
                 case 1:
                 case 3:
-                    printf("IDT");
+                    end += snprintf(&err_code_msg[end], len - end, "IDT");
                     break;
                 case 2:
-                    printf("LDT");
+                    end += snprintf(&err_code_msg[end], len - end, "LDT");
                     break;
                 }
-                printf(" index %u\n", err_code >> 3);
+                end += snprintf(&err_code_msg[end], len - end, " index %u\n", err_code >> 3);
             }
         }
         break;
     case 14:
         // https://wiki.osdev.org/Exceptions#Page_Fault
-        printf("At address %p: ", read_cr2());
+        end += snprintf(&err_code_msg[end], len - end, "At address %p: ", read_cr2());
         if (err_code & PTE_P)
-            printf("protection violation");
+            end += snprintf(&err_code_msg[end], len - end, "protection violation, ");
         else
-            printf("page not present");
-        printf(", ");
+            end += snprintf(&err_code_msg[end], len - end, "page not present, ");
         if (err_code & PTE_W)
-            printf("attempted write");
+            end += snprintf(&err_code_msg[end], len - end, "attempted write");
         else
-            printf("attempted read");
-        printf("\n");
+            end += snprintf(&err_code_msg[end], len - end, "attempted read");
         break;
     }
-    printf("\nRegister states at exception:\n");
 
-    printf("  rax: ..................... 0x%lx\n", cpu_state->rax);
-    printf("  rbx: ..................... 0x%lx\n", cpu_state->rbx);
-    printf("  rcx: ..................... 0x%lx\n", cpu_state->rcx);
-    printf("  rdx: ..................... 0x%lx\n", cpu_state->rdx);
-    printf("  rdi: ..................... 0x%lx\n", cpu_state->rdi);
-    printf("  rsi: ..................... 0x%lx\n", cpu_state->rsi);
-    printf("  rbp: ..................... 0x%lx\n", cpu_state->rbp);
-    printf("  rsp: ..................... 0x%lx\n", cpu_state->rsp);
-    printf("  rip: ..................... 0x%lx\n", cpu_state->rip);
-    printf("\n");
-    printf("  cs: 0x%lx\n", cpu_state->cs);
-    printf("\n");
-    printf("  Interrupt Number: ........ %u\n", int_no);
-    printf("  Error Code: .............. %u\n", err_code);
-    printf("  rflags: .................. 0x%lx\n", cpu_state->rflags);
-
-    HALT();
+    PANIC("\
+Exception: %s\n\
+%s\n\
+\n\
+Registers at exception:\n\
+  rax: ..................... 0x%lx\n\
+  rbx: ..................... 0x%lx\n\
+  rcx: ..................... 0x%lx\n\
+  rdx: ..................... 0x%lx\n\
+  rdi: ..................... 0x%lx\n\
+  rsi: ..................... 0x%lx\n\
+  rbp: ..................... 0x%lx\n\
+  rsp: ..................... 0x%lx\n\
+  rip: ..................... 0x%lx\n\
+\n\
+  cs: 0x%lx\n\
+  Interrupt Number: ........ %u\n\
+  Error Code: .............. %u\n\
+  rflags: .................. 0x%lx\n\
+",
+          exception_messages[int_no],
+          err_code_msg,
+          cpu_state->rax, cpu_state->rbx, cpu_state->rcx, cpu_state->rdx,
+          cpu_state->rdi, cpu_state->rsi, cpu_state->rbp, cpu_state->rsp,
+          cpu_state->rip,
+          cpu_state->cs, int_no, err_code, cpu_state->rflags);
 }
 
 void syscall(cpu_state_t* cpu_state)
@@ -174,7 +183,7 @@ void isr_common(cpu_state_t* cpu_state)
             printf("SPURIOUS!\n");
             break;
         case T_IRQ0 + IRQ_TIMER:
-            printf("TIMER\n");
+            printf(".");
             lapic_eoi();
             break;
         default:

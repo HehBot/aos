@@ -6,11 +6,15 @@
 #include <stdint.h>
 
 typedef struct {
+    int ncli;
+    int interrut_enabled;
+
     gdt_entry_t gdt[NR_GDT_ENTRIES];
     tss_t tss;
+
     uint8_t acpi_proc_id;
     uint8_t lapic_id;
-    uint8_t ist_stack[512];
+    uint8_t ist_stack[2000];
 } cpu_t;
 
 #define MAX_CPUS 32

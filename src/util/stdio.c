@@ -1,5 +1,6 @@
 #include <drivers/screen.h>
 #include <stdarg.h>
+#include <string.h>
 
 typedef long long int ssize_t;
 
@@ -19,74 +20,68 @@ typedef enum printf_length {
 
 static char const l[] = "0123456789abcdef";
 
-static void putint(ssize_t arg, int length, unsigned int base)
+static size_t get_arg(va_list ap, printf_length_t length, int is_signed)
 {
-    if (arg < 0)
-        putc('-');
-
-    switch (length) {
-    case PRINTF_LENGTH_SHORT_SHORT:
-        arg = (char)arg;
-        break;
-    case PRINTF_LENGTH_SHORT:
-        arg = (short int)arg;
-        break;
-    case PRINTF_LENGTH_DEFAULT:
-        arg = (int)arg;
-        break;
-    case PRINTF_LENGTH_LONG:
-        arg = (long int)arg;
-        break;
-    case PRINTF_LENGTH_LONG_LONG:
-        arg = (long long int)arg;
-        break;
+    size_t arg;
+    if (is_signed) {
+        switch (length) {
+        case PRINTF_LENGTH_SHORT_SHORT:
+        case PRINTF_LENGTH_SHORT:
+        case PRINTF_LENGTH_DEFAULT:
+            arg = va_arg(ap, int);
+            break;
+        case PRINTF_LENGTH_LONG:
+            arg = va_arg(ap, long int);
+            break;
+        case PRINTF_LENGTH_LONG_LONG:
+            arg = va_arg(ap, long long int);
+        }
+    } else {
+        switch (length) {
+        case PRINTF_LENGTH_SHORT_SHORT:
+        case PRINTF_LENGTH_SHORT:
+        case PRINTF_LENGTH_DEFAULT:
+            arg = va_arg(ap, unsigned int);
+            break;
+        case PRINTF_LENGTH_LONG:
+            arg = va_arg(ap, unsigned long int);
+            break;
+        case PRINTF_LENGTH_LONG_LONG:
+            arg = va_arg(ap, unsigned long long int);
+        }
     }
-
-    char buf[25] = { 0 };
-    int i = 0;
-    do {
-        buf[i++] = l[arg % base];
-        arg /= base;
-    } while (arg > 0);
-    while (i > 0)
-        putc(buf[--i]);
+    return arg;
 }
-static void putuint(size_t arg, int length, unsigned int base)
-{
-    switch (length) {
-    case PRINTF_LENGTH_SHORT_SHORT:
-        arg = (unsigned char)arg;
-        break;
-    case PRINTF_LENGTH_SHORT:
-        arg = (unsigned short int)arg;
-        break;
-    case PRINTF_LENGTH_DEFAULT:
-        arg = (unsigned int)arg;
-        break;
-    case PRINTF_LENGTH_LONG:
-        arg = (unsigned long int)arg;
-        break;
-    case PRINTF_LENGTH_LONG_LONG:
-        arg = (unsigned long long int)arg;
-    }
 
+static size_t putuint(size_t arg, unsigned int base, int (*putc)(void*, char), void* putc_arg)
+{
     int i = 0;
     char buf[25] = { 0 };
     do {
         buf[i++] = l[arg % base];
         arg /= base;
     } while (arg > 0);
+    int n = 0;
     while (i > 0)
-        putc(buf[--i]);
+        n += putc(putc_arg, buf[--i]);
+    return n;
+}
+static size_t putint(ssize_t arg, unsigned int base, int (*putc)(void*, char), void* putc_arg)
+{
+    size_t n = 0;
+    if (arg < 0) {
+        n += putc(putc_arg, '-');
+        arg = -arg;
+    }
+    return n + putuint(arg, base, putc, putc_arg);
 }
 
-void __attribute__((format(printf, 1, 2))) printf(char const* fmt, ...)
+int vprintf_put(char const* fmt, va_list ap, int (*putc)(void*, char), int (*puts)(void*, char const*), void* put_arg)
 {
-    va_list ap;
-    va_start(ap, fmt);
-
     printf_state_t state = PRINTF_STATE_NORMAL;
     printf_length_t length = PRINTF_LENGTH_DEFAULT;
+
+    size_t n = 0;
 
     while (*fmt) {
         switch (state) {
@@ -96,7 +91,7 @@ void __attribute__((format(printf, 1, 2))) printf(char const* fmt, ...)
                 state = PRINTF_STATE_LENGTH;
                 break;
             default:
-                putc(*fmt);
+                n += putc(put_arg, *fmt);
             }
             break;
         case PRINTF_STATE_LENGTH:
@@ -122,35 +117,35 @@ void __attribute__((format(printf, 1, 2))) printf(char const* fmt, ...)
         case PRINTF_STATE_SPECIFIER:
             switch (*fmt) {
             case 's':
-                puts(va_arg(ap, char*));
+                n += puts(put_arg, va_arg(ap, char const*));
                 break;
             case 'c':
-                putc(va_arg(ap, int));
+                n += putc(put_arg, va_arg(ap, int));
                 break;
             case 'd':
             case 'i':
-                putint(va_arg(ap, ssize_t), length, 10);
+                n += putint(get_arg(ap, length, 1), 10, putc, put_arg);
                 break;
             case 'o':
-                putuint(va_arg(ap, size_t), length, 8);
+                n += putuint(get_arg(ap, length, 0), 8, putc, put_arg);
                 break;
             case 'p':
-                putc('0');
-                putc('x');
-                putuint(va_arg(ap, size_t), PRINTF_LENGTH_LONG_LONG, 16);
+                n += putc(put_arg, '0');
+                n += putc(put_arg, 'x');
+                n += putuint(va_arg(ap, uintptr_t), 16, putc, put_arg);
                 break;
             case 'u':
-                putuint(va_arg(ap, size_t), length, 10);
+                n += putuint(get_arg(ap, length, 0), 10, putc, put_arg);
                 break;
             case 'x':
-                putuint(va_arg(ap, size_t), length, 16);
+                n += putuint(get_arg(ap, length, 0), 16, putc, put_arg);
                 break;
             case '%':
-                putc('%');
+                n += putc(put_arg, '%');
                 break;
             default:
-                putc('%');
-                putc(*fmt);
+                n += putc(put_arg, '%');
+                n += putc(put_arg, *fmt);
             }
             state = PRINTF_STATE_NORMAL;
             length = PRINTF_LENGTH_DEFAULT;
@@ -158,5 +153,76 @@ void __attribute__((format(printf, 1, 2))) printf(char const* fmt, ...)
         }
         fmt++;
     }
+    return n;
+}
+
+static int putc_wrapper(void*, char c)
+{
+    putc(c);
+    return 1;
+}
+static int puts_wrapper(void*, char const* s)
+{
+    puts(s);
+    return strlen(s);
+}
+int vprintf(char const* fmt, va_list ap)
+{
+    return vprintf_put(fmt, ap, &putc_wrapper, &puts_wrapper, NULL);
+}
+int __attribute__((format(printf, 1, 2))) printf(char const* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vprintf(fmt, ap);
     va_end(ap);
+    return n;
+}
+
+struct putc_str_arg {
+    char* buf;
+    size_t sz;
+    size_t pos;
+};
+int putc_str(void* putc_arg, char c)
+{
+    struct putc_str_arg* a = putc_arg;
+    if (a->pos < a->sz) {
+        a->buf[a->pos++] = c;
+        return 1;
+    }
+    return 0;
+}
+int puts_str(void* putc_arg, char const* s)
+{
+    struct putc_str_arg* a = putc_arg;
+    size_t l = strlen(s);
+    size_t rem = a->sz - a->pos;
+    if (l > rem)
+        l = rem;
+    memcpy(&a->buf[a->pos], s, l);
+    a->pos += l;
+    return l;
+}
+int vsnprintf(char* buf, size_t sz, char const* fmt, va_list ap)
+{
+    if (sz == 0)
+        return 0;
+    else if (sz == 1) {
+        buf[0] = 0;
+        return 0;
+    }
+    struct putc_str_arg a = { buf, sz - 1, 0 };
+    int n = vprintf_put(fmt, ap, &putc_str, &puts_str, &a);
+    buf[a.pos] = '\0';
+
+    return n;
+}
+int __attribute__((format(printf, 3, 4))) snprintf(char* buf, size_t sz, char const* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, sz, fmt, ap);
+    va_end(ap);
+    return n;
 }

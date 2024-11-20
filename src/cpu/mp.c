@@ -4,13 +4,13 @@
 #include <cpu/x86.h>
 #include <string.h>
 
-cpu_t cpus[MAX_CPUS];
+cpu_t cpus[MAX_CPUS] = { 0 };
 size_t nr_cpus = 0;
 
 cpu_t* get_cpu(void)
 {
-    // if (get_eflags() & EFLAGS_INT)
-    //     PANIC(__FILE__);
+    if (read_rflags() & RFLAGS_INT)
+        PANIC("get_cpu - interruptible");
 
     uint8_t lapic_id(void);
     uint8_t id = lapic_id();
@@ -52,4 +52,5 @@ void init_cpu(void)
     ltr(TSS_SEG);
 
     load_idt();
+    printf("Started cpu %d\n", c->acpi_proc_id);
 }

@@ -37,7 +37,7 @@ CFLAGS := -c -g \
 		  $(INC_FLAGS)
 LDFLAGS := -T linker.ld --gc-sections
 
-EMU_FLAGS := -smp cpus=4,cores=1,threads=1,sockets=4
+EMU_FLAGS := -smp cpus=4
 
 run_cdrom: $(BOOTCDROM)
 	$(EMU) $(EMU_FLAGS) -drive file=$(BOOTCDROM),index=0,media=disk,format=raw
