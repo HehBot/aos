@@ -1,5 +1,6 @@
 #include <cpu/mp.h>
 #include <cpu/x86.h>
+#include <drivers/ega.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -131,25 +132,28 @@ Exception: %s\n\
 %s\n\
 \n\
 Registers at exception:\n\
-  rax: ..................... 0x%lx\n\
-  rbx: ..................... 0x%lx\n\
-  rcx: ..................... 0x%lx\n\
-  rdx: ..................... 0x%lx\n\
-  rdi: ..................... 0x%lx\n\
-  rsi: ..................... 0x%lx\n\
-  rbp: ..................... 0x%lx\n\
-  rsp: ..................... 0x%lx\n\
-  rip: ..................... 0x%lx\n\
+  rax: 0x%lx rbx: 0x%lx\n\
+  rcx: 0x%lx rdx: 0x%lx\n\
+  rdi: 0x%lx rsi: 0x%lx\n\
+  rbp: 0x%lx rsp: 0x%lx\n\
+  r8 : 0x%lx r9 : 0x%lx\n\
+  r10: 0x%lx r11: 0x%lx\n\
+  r12: 0x%lx r13: 0x%lx\n\
+  r14: 0x%lx r15: 0x%lx\n\
 \n\
-  cs: 0x%lx\n\
+  rip:  0x%lx\n\
+  cs:   0x%lx\n\
+\n\
   Interrupt Number: ........ %u\n\
-  Error Code: .............. %u\n\
+  Error Code: .............. 0x%x\n\
   rflags: .................. 0x%lx\n\
 ",
           exception_messages[int_no],
           err_code_msg,
           cpu_state->rax, cpu_state->rbx, cpu_state->rcx, cpu_state->rdx,
           cpu_state->rdi, cpu_state->rsi, cpu_state->rbp, cpu_state->rsp,
+          cpu_state->r8, cpu_state->r9, cpu_state->r10, cpu_state->r11,
+          cpu_state->r12, cpu_state->r13, cpu_state->r14, cpu_state->r15,
           cpu_state->rip,
           cpu_state->cs, int_no, err_code, cpu_state->rflags);
 }

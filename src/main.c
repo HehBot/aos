@@ -4,7 +4,7 @@
 #include <cpu/ioapic.h>
 #include <cpu/mp.h>
 #include <cpu/x86.h>
-#include <drivers/screen.h>
+#include <drivers/ega.h>
 #include <fs/fs.h>
 #include <fs/initrd.h>
 #include <hash_table.h>
@@ -54,8 +54,8 @@ void main(phys_addr_t phys_addr_mboot_info)
 {
     struct multiboot_info mboot_info = parse_mboot_info(kernel_static_from_phys_addr(phys_addr_mboot_info));
 
-    init_screen(mboot_info.tag_framebuffer, NULL);
-    clear_screen();
+    init_ega(mboot_info.tag_framebuffer, NULL);
+    ega_clear();
     printf("Hello from C!\n");
 
     /*
@@ -77,7 +77,7 @@ void main(phys_addr_t phys_addr_mboot_info)
     init_paging();
     virt_addr_t heap_start = (virt_addr_t)0x2000000;
 
-    init_screen(mboot_info.tag_framebuffer, &heap_start);
+    init_ega(mboot_info.tag_framebuffer, &heap_start);
 
     /*
      * TODO reclaim MULTIBOOT_MEMORY_ACPI_RECLAIMABLE entries
@@ -96,10 +96,12 @@ void main(phys_addr_t phys_addr_mboot_info)
     /*
      * now we can start using spinlocks
      */
-    screen_enable_locking();
+    ega_enable_lock();
 
-    asm volatile("int3");
+    // asm volatile("int3");
     // asm volatile("int $0x8");
+    // int* x = NULL;
+    // *x = 0;
 
     err = paging_map(heap_start, acpi_info.ioapic_addr, PAGE_4KiB, PTE_W | PTE_P);
     if (err != PAGING_OK)
@@ -131,11 +133,8 @@ void main(phys_addr_t phys_addr_mboot_info)
     __sync_synchronize();
     enable_interrupts();
 
-    while (1) {
-        for (int i = 0; i < 10000; ++i)
-            ;
+    while (1)
         printf("-");
-    }
 
     while (1) {
     }

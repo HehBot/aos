@@ -16,7 +16,7 @@ isr_\n:
         jmp     isr_stub
 .endm
 
-// see https://wiki.osdev.org/Exceptions
+// see Intel Manual Vol3 6.14.2
 .extern isr_common
 isr_stub:
         push    %rax
@@ -26,16 +26,32 @@ isr_stub:
         push    %rbp
         push    %rsi
         push    %rdi
+        push    %r8
+        push    %r9
+        push    %r10
+        push    %r11
+        push    %r12
+        push    %r13
+        push    %r14
+        push    %r15
 
         mov     %rsp, %rdi      // param to isr_common
         cld
         call    isr_common
 
+        pop     %r15
+        pop     %r14
+        pop     %r13
+        pop     %r12
+        pop     %r11
+        pop     %r10
+        pop     %r9
+        pop     %r8
         pop     %rdi
         pop     %rsi
         pop     %rbp
         pop     %rbx
-        pop     %rbx
+        pop     %rdx
         pop     %rcx
         pop     %rax
 

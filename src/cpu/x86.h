@@ -12,7 +12,7 @@
 #ifndef __ASSEMBLER__
 static inline void hlt()
 {
-    asm("hlt");
+    asm volatile("hlt");
 }
 
 _Noreturn __attribute__((format(printf, 1, 2))) void PANIC(char const* fmt, ...);
@@ -27,6 +27,8 @@ static inline uint64_t read_rflags(void)
 
 // IDT
 typedef struct {
+    uint64_t r15, r14, r13, r12;
+    uint64_t r11, r10, r9, r8;
     uint64_t rdi, rsi, rbp;
     uint64_t rbx, rdx, rcx, rax;
 
@@ -36,8 +38,6 @@ typedef struct {
     uint64_t rip;
     uint64_t cs;
     uint64_t rflags;
-
-    // pushed by cpu only on pl change
     uint64_t rsp;
     uint64_t ss;
 } __attribute__((packed)) cpu_state_t;
@@ -180,7 +180,7 @@ static inline void lgdt(gdt_entry_t* gdt, uint16_t size, uint16_t cs)
 }
 static inline void ltr(uint16_t tss_seg)
 {
-    asm("ltr %w0" ::"r"(tss_seg));
+    asm volatile("ltr %w0" ::"r"(tss_seg));
 }
 
 #else
@@ -214,25 +214,25 @@ static inline void ltr(uint16_t tss_seg)
     #include <memory/page.h>
 static inline void write_cr3(phys_addr_t p4_phys_addr)
 {
-    asm("mov %q0, %%cr3" ::"r"(p4_phys_addr) : "memory");
+    asm volatile("mov %q0, %%cr3" ::"r"(p4_phys_addr) : "memory");
 }
 static inline phys_addr_t read_cr3()
 {
     phys_addr_t p4_phys_addr;
-    asm("mov %%cr3, %q0" : "=r"(p4_phys_addr)::"memory");
+    asm volatile("mov %%cr3, %q0" : "=r"(p4_phys_addr)::"memory");
     return p4_phys_addr;
 }
 static inline virt_addr_t read_cr2(void)
 {
     virt_addr_t pa = NULL;
-    asm("movq %%cr2, %0"
-        : "=r"(pa)
-        :);
+    asm volatile("movq %%cr2, %0"
+                 : "=r"(pa)
+                 :);
     return pa;
 }
 static inline void flush_tlb(virt_addr_t va)
 {
-    asm("invlpg (%q0)" ::"r"(va) : "memory");
+    asm volatile("invlpg (%q0)" ::"r"(va) : "memory");
 }
 static inline void flush_tlb_all()
 {
