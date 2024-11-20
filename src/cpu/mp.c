@@ -52,5 +52,5 @@ void init_cpu(void)
     ltr(TSS_SEG);
 
     load_idt();
-    printf("Started cpu %d\n", c->acpi_proc_id);
+    printf("[Started cpu %d]\n", c->acpi_proc_id);
 }

@@ -10,6 +10,7 @@
 #include <hash_table.h>
 #include <memory/frame_allocator.h>
 #include <memory/kalloc.h>
+#include <memory/paging.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -58,9 +59,6 @@ void main(phys_addr_t phys_addr_mboot_info)
     ega_clear();
     printf("Hello from C!\n");
 
-    /*
-     * get elf section info from multiboot
-     */
     section_info_t section_info[4];
     parse_elf_section_info(mboot_info.tag_elf_sections, &section_info);
 
@@ -75,39 +73,19 @@ void main(phys_addr_t phys_addr_mboot_info)
      * initialise paging
      */
     init_paging();
-    virt_addr_t heap_start = (virt_addr_t)0x2000000;
+    virt_addr_t heap_start = (virt_addr_t)0xffff800000000000;
 
     init_ega(mboot_info.tag_framebuffer, &heap_start);
-
-    /*
-     * TODO reclaim MULTIBOOT_MEMORY_ACPI_RECLAIMABLE entries
-     */
     acpi_info_t acpi_info = parse_acpi(mboot_info.tag_old_acpi->rsdp, &heap_start);
-
-    int err = paging_map(heap_start, acpi_info.lapic_addr, PAGE_4KiB, PTE_W | PTE_P);
-    if (err != PAGING_OK)
-        printf("Unable to map lapic register");
-    init_lapic(heap_start);
-    heap_start += PAGE_SIZE;
+    init_lapic(&heap_start, acpi_info.lapic_addr);
 
     init_idt();
     init_cpu(); // needs get_cpu which needs lapic initialised
-
     /*
      * now we can start using spinlocks
      */
     ega_enable_lock();
-
-    // asm volatile("int3");
-    // asm volatile("int $0x8");
-    // int* x = NULL;
-    // *x = 0;
-
-    err = paging_map(heap_start, acpi_info.ioapic_addr, PAGE_4KiB, PTE_W | PTE_P);
-    if (err != PAGING_OK)
-        printf("Unable to map ioapic register");
-    init_ioapic(heap_start, acpi_info.ioapic_id);
-    heap_start += PAGE_SIZE;
+    init_ioapic(&heap_start, acpi_info.ioapic_addr, acpi_info.ioapic_id);
     ioapic_enable(IRQ_KBD, get_cpu()->lapic_id);
 
     /*
@@ -115,27 +93,11 @@ void main(phys_addr_t phys_addr_mboot_info)
      * now we can safely use frame_allocator_get_frame
      */
 
-    /*
-     * set up kernel heap
-     */
-    size_t heap_size = 0x200000;
-    for (size_t i = 0; i < heap_size / PAGE_SIZE; ++i) {
-        phys_addr_t frame = frame_allocator_get_frame();
-        if (frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
-            PANIC("Unable to allocate frames for heap");
-        int err = paging_map(heap_start + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_W | PTE_P);
-        if (err != PAGING_OK)
-            PANIC("Unable to map heap");
-    }
-
-    printf("Haven't crashed\n");
+    init_kpalloc(heap_start);
 
     __sync_synchronize();
     enable_interrupts();
 
     while (1)
-        printf("-");
-
-    while (1) {
-    }
+        hlt();
 }

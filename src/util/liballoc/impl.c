@@ -18,5 +18,5 @@ void* liballoc_alloc(size_t pages)
 
 int liballoc_free(void* ptr, size_t)
 {
-    return kpfree(ptr);
+    return !kpfree(ptr);
 }

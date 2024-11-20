@@ -37,10 +37,15 @@ static void ioapic_write(uint8_t reg, uint32_t data)
     ioapic->data = data;
 }
 
-void init_ioapic(void* addr, uint8_t id)
+void init_ioapic(virt_addr_t* mapping_addr_ptr, phys_addr_t ioapic_addr, uint8_t id)
 {
-    ioapic = addr;
+    ioapic = *mapping_addr_ptr;
     ioapic_id = id;
+
+    int err = paging_map(*mapping_addr_ptr, ioapic_addr, PAGE_4KiB, PTE_W | PTE_P);
+    if (err != PAGING_OK)
+        PANIC("Unable to map ioapic register");
+    *mapping_addr_ptr += PAGE_SIZE;
 
     uint8_t z = (ioapic_read(IOAPIC_ID) >> 24);
     if (z != id)

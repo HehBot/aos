@@ -54,15 +54,10 @@ void parse_elf_section_info(struct multiboot_tag_elf_sections const* e, section_
      */
     if (si[2].present && si[3].present) {
         si[2].name = ".data+.bss";
-        if (si[2].start < si[3].start) {
-            if (si[2].end != si[3].start)
-                PANIC("Bad linker script");
+        if (si[2].start < si[3].start)
             si[2].end = si[3].end;
-        } else {
-            if (si[3].end != si[2].start)
-                PANIC("Bad linker script");
+        else
             si[2].start = si[3].start;
-        }
         si[3] = (section_info_t) {};
     }
 

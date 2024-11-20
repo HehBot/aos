@@ -1,3 +1,4 @@
+#include "frame_allocator.h"
 #include "kalloc.h"
 #include "paging.h"
 
@@ -9,10 +10,10 @@
 typedef struct run {
     struct run* next;
     struct run* prev;
-    uintptr_t addr;
-    size_t alloc : 1;
-    size_t sz : 31;
-} run_t;
+    virt_addr_t addr;
+    size_t nr_pages;
+    int alloc;
+} __attribute__((packed)) run_t;
 
 static run_t* pool;
 #define POOL_SZ 1000
@@ -38,68 +39,95 @@ static inline void free_run(run_t* p)
     p->alloc = 0;
 }
 
+#define INIT_NR_PAGES 16
+#define NR_PAGES_INCREMENT 16
+
 static run_t* free_list;
 static run_t* free_list_end;
-static uintptr_t end;
+static virt_addr_t end;
 static run_t* occ_list;
 
-void init_kpalloc(virt_addr_t heap_start, size_t init_heap_sz)
+void init_kpalloc(virt_addr_t heap_start)
 {
-    pool = kwmalloc(POOL_SZ * (sizeof pool[0]));
+    pool = heap_start;
+    for (size_t i = 0; i < POOL_SZ * sizeof(pool[0]); i += PAGE_SIZE, heap_start += PAGE_SIZE) {
+        phys_addr_t frame = frame_allocator_get_frame();
+        if (frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
+            PANIC("Unable to allocate frame for kpalloc pool");
+        int err = paging_map(heap_start, frame, PAGE_4KiB, PTE_P | PTE_W);
+        if (err != PAGING_OK)
+            PANIC("Unable to map pages for kpalloc pool");
+    }
     memset(pool, 0, POOL_SZ * (sizeof pool[0]));
 
     free_list = free_list_end = alloc_run();
     free_list->next = free_list->prev = NULL;
 
-    free_list->addr = (uintptr_t)heap_start;
-    free_list->sz = init_heap_sz;
+    free_list->addr = heap_start;
+    free_list->nr_pages = INIT_NR_PAGES;
 
-    end = free_list->addr + init_heap_sz * PAGE_SIZE;
+    end = free_list->addr + INIT_NR_PAGES * PAGE_SIZE;
+    printf("[Heap: %p-%p]\n", heap_start, end);
     occ_list = NULL;
+
+    for (size_t i = 0; i < INIT_NR_PAGES; ++i) {
+        phys_addr_t frame = frame_allocator_get_frame();
+        if (frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
+            PANIC("Unable to allocate frames for heap");
+        int err = paging_map(heap_start + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_W | PTE_P);
+        if (err != PAGING_OK)
+            PANIC("Unable to map heap");
+    }
 }
 
 void* kpalloc(size_t n)
 {
     run_t* p = free_list;
 
-    for (; p != NULL && p->sz < n; p = p->next)
+    for (; p != NULL && p->nr_pages < n; p = p->next)
         ;
 
     if (p == NULL) {
-
-        if (n > 0x100000 || end > 0xffffffff - n * PAGE_SIZE)
-            return NULL;
-
         size_t nr;
-        if (free_list_end != NULL && free_list_end->addr + free_list_end->sz * PAGE_SIZE == end)
-            nr = (n - free_list_end->sz);
+        if (free_list_end != NULL && free_list_end->addr + free_list_end->nr_pages * PAGE_SIZE == end)
+            nr = (n - free_list_end->nr_pages);
         else
             nr = n;
 
-        // optimise
-        // nr = (nr * 3) / 2;
+        if (nr < 16)
+            nr = 16;
+        else {
+            // optimise
+            // nr = (nr * 3) / 2;
+        }
 
-        // for (uintptr_t virt = end; virt < end + nr * PAGE_SIZE; virt += PAGE_SIZE)
-        //     map(pmm_get_frame(), (void*)virt, PAGE_SIZE, PTE_W);
+        for (virt_addr_t page = end; page < end + nr * PAGE_SIZE; page += PAGE_SIZE) {
+            phys_addr_t frame = frame_allocator_get_frame();
+            if (frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
+                PANIC("Unable to allocate more frames for heap");
+            int err = paging_map(page, frame, PAGE_4KiB, PTE_W | PTE_P);
+            if (err != PAGING_OK)
+                PANIC("Unable to map heap");
+        }
 
-        if (free_list_end != NULL && free_list_end->addr + free_list_end->sz * PAGE_SIZE == end)
-            free_list_end->sz += nr;
+        if (free_list_end != NULL && free_list_end->addr + free_list_end->nr_pages * PAGE_SIZE == end)
+            free_list_end->nr_pages += nr;
         else if (free_list_end != NULL) {
             free_list_end->next = alloc_run();
             free_list_end->next->prev = free_list_end;
             free_list_end = free_list_end->next;
-            free_list_end->sz = nr;
+            free_list_end->nr_pages = nr;
             free_list_end->addr = end;
         } else {
             free_list = free_list_end = alloc_run();
             free_list->next = free_list->prev = NULL;
-            free_list->sz = nr;
+            free_list->nr_pages = nr;
             free_list->addr = end;
         }
 
         end += nr * PAGE_SIZE;
         return kpalloc(n);
-    } else if (p->sz == n) {
+    } else if (p->nr_pages == n) {
         if (p->next != NULL)
             p->next->prev = p->prev;
         else
@@ -109,10 +137,10 @@ void* kpalloc(size_t n)
         else
             free_list = p->next;
     } else {
-        p->sz -= n;
+        p->nr_pages -= n;
         run_t* new = alloc_run();
-        new->addr = (p->addr + p->sz * PAGE_SIZE);
-        new->sz = n;
+        new->addr = (p->addr + p->nr_pages * PAGE_SIZE);
+        new->nr_pages = n;
         p = new;
     }
 
@@ -125,17 +153,16 @@ void* kpalloc(size_t n)
         p->prev = NULL;
         occ_list = p;
     }
-    return (void*)p->addr;
+    return p->addr;
 }
 
-int kpfree(void* a)
+int kpfree(virt_addr_t addr)
 {
-    uintptr_t addr = PAGE_ROUND_DOWN((uintptr_t)a);
     run_t* p = occ_list;
     for (; p != NULL && p->addr != addr; p = p->next)
         ;
     if (p == NULL)
-        return 1;
+        return 0;
     if (p->next != NULL)
         p->next->prev = p->prev;
     if (p->prev != NULL)
@@ -174,10 +201,10 @@ int kpfree(void* a)
         }
 
         // coalesce free areas
-        while (p->prev != NULL && (p->prev->addr + p->prev->sz * PAGE_SIZE == p->addr))
+        while (p->prev != NULL && (p->prev->addr + p->prev->nr_pages * PAGE_SIZE == p->addr))
             p = p->prev;
-        while (p->next != NULL && (p->addr + p->sz * PAGE_SIZE == p->next->addr)) {
-            p->sz += p->next->sz;
+        while (p->next != NULL && (p->addr + p->nr_pages * PAGE_SIZE == p->next->addr)) {
+            p->nr_pages += p->next->nr_pages;
             run_t* old = p->next;
             p->next = p->next->next;
             free_run(old);
@@ -187,5 +214,5 @@ int kpfree(void* a)
         else
             free_list_end = p;
     }
-    return 0;
+    return 1;
 }

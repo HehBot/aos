@@ -59,15 +59,20 @@ static void lapic_write(size_t reg, uint32_t val)
 }
 
 // see https://wiki.osdev.org/APIC_Timer#Example_code_in_ASM
-void init_lapic(void* lapic_addr)
+void init_lapic(virt_addr_t* mapping_addr_ptr, phys_addr_t lapic_addr)
 {
-    lapic = lapic_addr;
+    lapic = *mapping_addr_ptr;
+
+    int err = paging_map(*mapping_addr_ptr, lapic_addr, PAGE_4KiB, PTE_W | PTE_P);
+    if (err != PAGING_OK)
+        printf("Unable to map lapic register");
+    *mapping_addr_ptr += PAGE_SIZE;
 
     lapic_write(LAPIC_SVR, SW_ENABLE | (T_IRQ0 + IRQ_SPUR));
 
     lapic_write(LAPIC_TIMER, TIMER_PERIODIC | (T_IRQ0 + IRQ_TIMER));
     lapic_write(LAPIC_TDCR, 0x1);
-    lapic_write(LAPIC_TICR, 10000);
+    lapic_write(LAPIC_TICR, 10000000);
 
     lapic_write(LAPIC_LINT0, DISABLE);
     lapic_write(LAPIC_LINT1, DISABLE);
