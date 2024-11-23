@@ -3,6 +3,7 @@
 #include <cpu/ioapic.h>
 #include <cpu/mp.h>
 #include <memory/paging.h>
+#include <multiboot2.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -71,11 +72,15 @@ static acpi_info_t parse_madt(madt_t const* madt)
     return info;
 }
 
-acpi_info_t parse_acpi(void const* __rsdp, virt_addr_t* mapping_addr_ptr)
+acpi_info_t parse_acpi(struct multiboot_tag_old_acpi const* old_acpi_tag, struct multiboot_tag_new_acpi const* new_acpi_tag, virt_addr_t* mapping_addr_ptr)
 {
-    rsdp_t const* rsdp = __rsdp;
-    if (rsdp == NULL
-        || memcmp(rsdp->sign, "RSD PTR ", 8) != 0
+    if (old_acpi_tag == NULL && new_acpi_tag == NULL)
+        PANIC("No acpi tag found");
+    else if (old_acpi_tag == NULL)
+        PANIC("New acpi tag not supported");
+
+    rsdp_t const* rsdp = (void const*)old_acpi_tag->rsdp;
+    if (memcmp(rsdp->sign, "RSD PTR ", 8) != 0
         || rsdp->version != 0
         || memsum(rsdp, sizeof(*rsdp)) != 0) {
         PANIC("Bad RSDP");

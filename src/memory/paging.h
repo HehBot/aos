@@ -3,10 +3,11 @@
 
 #include "page.h"
 
+#include <bootinfo.h>
 #include <stddef.h>
 #include <stdint.h>
 
-void init_paging();
+void init_paging(section_info_t* section_info, size_t nr_sections);
 
 enum {
     PAGING_OK = 0,

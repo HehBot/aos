@@ -10,6 +10,8 @@ typedef struct {
     uint8_t ioapic_id;
 } acpi_info_t;
 
-acpi_info_t parse_acpi(void const* rsdp, virt_addr_t* mapping_addr_ptr);
+struct multiboot_tag_old_acpi;
+struct multiboot_tag_new_acpi;
+acpi_info_t parse_acpi(struct multiboot_tag_old_acpi const* old_acpi_tag, struct multiboot_tag_new_acpi const* new_acpi_tag, virt_addr_t* mapping_addr_ptr);
 
 #endif // ACPI_H

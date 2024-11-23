@@ -22,18 +22,33 @@ static virt_addr_t map_temp(phys_addr_t pa)
     return buf_page;
 }
 
-void init_paging()
+static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sections)
+{
+    for (size_t i = 0; i < nr_sections; ++i) {
+        if (section_info[i].present) {
+            phys_addr_t section_start = phys_addr_of_kernel_static((virt_addr_t)section_info[i].start);
+            phys_addr_t section_end = phys_addr_of_kernel_static((virt_addr_t)section_info[i].end);
+            phys_addr_t first_frame = PAGE_ROUND_DOWN(section_start);
+            phys_addr_t last_frame = PAGE_ROUND_DOWN(section_end - 1);
+            for (phys_addr_t p = first_frame; p <= last_frame; p += PAGE_SIZE) {
+                int err = frame_allocator_reserve_frame(p);
+                if (err != FRAME_ALLOCATOR_OK) {
+                    printf("%d\n", err);
+                    PANIC("Unable to reserve kernel frames");
+                }
+            }
+        }
+    }
+}
+
+void init_paging(section_info_t* section_info, size_t nr_sections)
 {
     extern void* KERN_BASE;
     if (VA_P4_INDEX(&KERN_BASE) != VA_P4_INDEX(buf_page)
         || VA_P3_INDEX(&KERN_BASE) != VA_P3_INDEX(buf_page))
         PANIC("Bad buf_page address");
 
-    /*
-     * we don't reserve frames here
-     * since they are already reserved
-     * as part of kernel frames
-     */
+    reserve_kernel_frames(section_info, nr_sections);
 
     phys_addr_t phys_addr_p4 = read_cr3();
     p4 = kernel_static_from_phys_addr(phys_addr_p4);

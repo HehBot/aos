@@ -32,25 +32,6 @@
 //     }
 // }
 
-static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sections)
-{
-    for (size_t i = 0; i < nr_sections; ++i) {
-        if (section_info[i].present) {
-            phys_addr_t section_start = phys_addr_of_kernel_static((virt_addr_t)section_info[i].start);
-            phys_addr_t section_end = phys_addr_of_kernel_static((virt_addr_t)section_info[i].end);
-            phys_addr_t first_frame = PAGE_ROUND_DOWN(section_start);
-            phys_addr_t last_frame = PAGE_ROUND_DOWN(section_end - 1);
-            for (phys_addr_t p = first_frame; p <= last_frame; p += PAGE_SIZE) {
-                int err = frame_allocator_reserve_frame(p);
-                if (err != FRAME_ALLOCATOR_OK) {
-                    printf("%d\n", err);
-                    PANIC("Unable to reserve kernel frames");
-                }
-            }
-        }
-    }
-}
-
 void main(phys_addr_t phys_addr_mboot_info)
 {
     struct multiboot_info mboot_info = parse_mboot_info(kernel_static_from_phys_addr(phys_addr_mboot_info));
@@ -62,29 +43,25 @@ void main(phys_addr_t phys_addr_mboot_info)
     section_info_t section_info[4];
     parse_elf_section_info(mboot_info.tag_elf_sections, &section_info);
 
-    /*
-     * initialise frame allocator and reserve kernel frames
-     * TODO also reserve multiboot info frames
-     */
     init_frame_allocator(mboot_info.tag_mmap);
-    reserve_kernel_frames(section_info, sizeof(section_info) / sizeof(section_info[0]));
 
-    /*
-     * initialise paging
-     */
-    init_paging();
+    init_paging(section_info, sizeof(section_info) / sizeof(section_info[0]));
+
     virt_addr_t heap_start = (virt_addr_t)0xffff800000000000;
 
     init_ega(mboot_info.tag_framebuffer, &heap_start);
-    acpi_info_t acpi_info = parse_acpi(mboot_info.tag_old_acpi->rsdp, &heap_start);
+
+    acpi_info_t acpi_info = parse_acpi(mboot_info.tag_old_acpi, mboot_info.tag_new_acpi, &heap_start);
     init_lapic(&heap_start, acpi_info.lapic_addr);
 
     init_idt();
     init_cpu(); // needs get_cpu which needs lapic initialised
+
     /*
      * now we can start using spinlocks
      */
     ega_enable_lock();
+
     init_ioapic(&heap_start, acpi_info.ioapic_addr, acpi_info.ioapic_id);
     ioapic_enable(IRQ_KBD, get_cpu()->lapic_id);
 

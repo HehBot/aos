@@ -35,6 +35,9 @@ static size_t get_arg(va_list ap, printf_length_t length, int is_signed)
             break;
         case PRINTF_LENGTH_LONG_LONG:
             arg = va_arg(ap, long long int);
+            break;
+        default:
+            __builtin_unreachable();
         }
     } else {
         switch (length) {
@@ -48,6 +51,9 @@ static size_t get_arg(va_list ap, printf_length_t length, int is_signed)
             break;
         case PRINTF_LENGTH_LONG_LONG:
             arg = va_arg(ap, unsigned long long int);
+            break;
+        default:
+            __builtin_unreachable();
         }
     }
     return arg;
