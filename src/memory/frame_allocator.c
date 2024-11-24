@@ -192,7 +192,7 @@ int frame_allocator_free_frame(phys_addr_t addr)
                 return FRAME_ALLOCATOR_ERROR_ALREADY_FREED;
 
             *entry ^= (((uint64_t)1) << bit_index_in_entry);
-            return 1;
+            return FRAME_ALLOCATOR_OK;
         }
         p = p->next;
     } while (p != sections);

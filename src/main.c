@@ -32,6 +32,12 @@
 //     }
 // }
 
+void stack_overflow(size_t i)
+{
+    printf("%s %lx\n", __func__, i);
+    stack_overflow(i + 1);
+}
+
 void main(phys_addr_t phys_addr_mboot_info)
 {
     struct multiboot_info mboot_info = parse_mboot_info(kernel_static_from_phys_addr(phys_addr_mboot_info));
@@ -69,8 +75,22 @@ void main(phys_addr_t phys_addr_mboot_info)
      * all required frames have been reserved
      * now we can safely use frame_allocator_get_frame
      */
-
     init_kpalloc(heap_start);
+
+    pgdir_t kpgdir = paging_new_pgdir();
+
+    /*
+     * stack overflow test
+     */
+    // stack_overflow(0);
+
+    /*
+     * heap NXE test
+     */
+    // uint8_t* instr = kmalloc(20);
+    // instr[0] = 0x90;
+    // instr[1] = 0xc3;
+    // asm volatile("call %0"::"r"(instr));
 
     __sync_synchronize();
     enable_interrupts();

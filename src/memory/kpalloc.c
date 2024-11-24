@@ -54,7 +54,7 @@ void init_kpalloc(virt_addr_t heap_start)
         phys_addr_t frame = frame_allocator_get_frame();
         if (frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
             PANIC("Unable to allocate frame for kpalloc pool");
-        int err = paging_map(heap_start, frame, PAGE_4KiB, PTE_P | PTE_W);
+        int err = paging_map(heap_start, frame, PAGE_4KiB, PTE_NX | PTE_P | PTE_W);
         if (err != PAGING_OK)
             PANIC("Unable to map pages for kpalloc pool");
     }
@@ -74,7 +74,7 @@ void init_kpalloc(virt_addr_t heap_start)
         phys_addr_t frame = frame_allocator_get_frame();
         if (frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
             PANIC("Unable to allocate frames for heap");
-        int err = paging_map(heap_start + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_W | PTE_P);
+        int err = paging_map(heap_start + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
         if (err != PAGING_OK)
             PANIC("Unable to map heap");
     }
@@ -105,7 +105,7 @@ void* kpalloc(size_t n)
             phys_addr_t frame = frame_allocator_get_frame();
             if (frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
                 PANIC("Unable to allocate more frames for heap");
-            int err = paging_map(page, frame, PAGE_4KiB, PTE_W | PTE_P);
+            int err = paging_map(page, frame, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
             if (err != PAGING_OK)
                 PANIC("Unable to map heap");
         }

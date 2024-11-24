@@ -26,7 +26,7 @@ typedef enum pte_flags {
     PTE_NX = 0x8000000000000000,
 } pte_flags_t;
 
-    #define PTE_FRAME(x) ((x) & 0xfffffffffffff000)
+    #define PTE_FRAME(x) ((x) & 0xfffffffff000)
 
 typedef enum page_table_level {
     PAGE_TABLE_P1 = 1,

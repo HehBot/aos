@@ -1,4 +1,5 @@
 #include "frame_allocator.h"
+#include "kalloc.h"
 #include "page.h"
 #include "paging.h"
 
@@ -14,12 +15,111 @@ typedef struct page_table {
 static page_table_t map_temp_p1;
 static virt_addr_t buf_page = (virt_addr_t)0xfffffffffffff000;
 
-static page_table_t* p4;
 static virt_addr_t map_temp(phys_addr_t pa)
 {
     map_temp_p1.entries[VA_P1_INDEX(buf_page)] = PTE(pa, PTE_W | PTE_P);
     flush_tlb(buf_page);
     return buf_page;
+}
+
+static pgdir_t curr_pgdir;
+
+static int kern_pgdir_setup = 0;
+static section_info_t kern_sections[4];
+static size_t nr_kern_sections;
+
+pgdir_t paging_new_pgdir()
+{
+    if (!kern_pgdir_setup) {
+        extern void* KERN_BASE;
+
+        pgdir_t new_pgdir;
+
+        new_pgdir.p4 = kpalloc(1);
+        memset(new_pgdir.p4, 0, sizeof(*new_pgdir.p4));
+
+        /*
+         * add heap mapping
+         */
+        new_pgdir.p4->entries[256] = PTE(PTE_FRAME(curr_pgdir.p4->entries[256]), PTE_W | PTE_P);
+
+        /*
+         * add kernel mappping
+         */
+        phys_addr_t phys_addr_p3 = frame_allocator_get_frame();
+        if (phys_addr_p3 == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
+            PANIC("Unable to allocate frame for new p3");
+        new_pgdir.p4->entries[VA_P4_INDEX(&KERN_BASE)] = PTE(phys_addr_p3, PTE_W | PTE_P);
+
+        page_table_t* p3 = map_temp(phys_addr_p3);
+        memset(p3, 0, sizeof(*p3));
+        phys_addr_t phys_addr_p2 = frame_allocator_get_frame();
+        if (phys_addr_p2 == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
+            PANIC("Unable to allocate frame for new p2");
+        p3->entries[VA_P3_INDEX(&KERN_BASE)] = PTE(phys_addr_p2, PTE_W | PTE_P);
+
+        page_table_t* p2 = map_temp(phys_addr_p2);
+        memset(p2, 0, sizeof(*p2));
+        phys_addr_t phys_addr_p1 = frame_allocator_get_frame();
+        if (phys_addr_p1 == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
+            PANIC("Unable to allocate frame for new p2");
+        p2->entries[VA_P2_INDEX(&KERN_BASE)] = PTE(phys_addr_p1, PTE_W | PTE_P);
+        /*
+         * add p1 of temp buf
+         */
+        p2->entries[VA_P2_INDEX(buf_page)] = PTE(phys_addr_of_kernel_static(&map_temp_p1), PTE_W | PTE_P);
+
+        page_table_t* p1 = map_temp(phys_addr_p1);
+        memset(p1, 0, sizeof(*p1));
+
+        for (size_t i = 0; i < nr_kern_sections; ++i) {
+            section_info_t* s = &kern_sections[i];
+            if (s->present) {
+                virt_addr_t start_page = (virt_addr_t)PAGE_ROUND_DOWN((size_t)s->start);
+                virt_addr_t end_page = (virt_addr_t)PAGE_ROUND_DOWN((size_t)s->end - 1);
+                for (virt_addr_t page = start_page; page <= end_page; page += PAGE_SIZE) {
+                    phys_addr_t frame = phys_addr_of_kernel_static(page);
+                    p1->entries[VA_P1_INDEX(page)] = PTE(frame, s->flags | PTE_P);
+                }
+            }
+        }
+
+        phys_addr_t phys_addr_old_p4 = read_cr3();
+
+        /*
+         * switch to proper kernel pgdir
+         */
+        phys_addr_t phys_addr_p4 = paging_translate_page(new_pgdir.p4, PAGE_4KiB);
+        write_cr3(phys_addr_p4);
+        curr_pgdir = new_pgdir;
+
+        /*
+         * unmap boot kernel pgdir (to act as stack guard)
+         */
+        phys_addr_t old_phys[3] = {
+            phys_addr_old_p4,
+            phys_addr_old_p4 + PAGE_SIZE,
+            phys_addr_old_p4 + 2 * PAGE_SIZE,
+        };
+        for (size_t i = 0; i < 3; ++i) {
+            virt_addr_t old_p = kernel_static_from_phys_addr(old_phys[i]);
+            phys_addr_t frame = paging_unmap(old_p, PAGE_4KiB);
+            if (frame & PAGING_ERROR)
+                PANIC("Unable to unmap boot kernel pgdir");
+            if (frame_allocator_free_frame(frame) != FRAME_ALLOCATOR_OK)
+                PANIC("Unable to free frames");
+        }
+
+        kern_pgdir_setup = 1;
+        return curr_pgdir;
+    } else {
+        pgdir_t new_pgdir;
+        new_pgdir.p4 = kpalloc(1);
+        if (new_pgdir.p4 == NULL)
+            PANIC("kpalloc failed");
+        memcpy(new_pgdir.p4, curr_pgdir.p4, sizeof(*new_pgdir.p4));
+        return new_pgdir;
+    }
 }
 
 static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sections)
@@ -32,10 +132,8 @@ static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sectio
             phys_addr_t last_frame = PAGE_ROUND_DOWN(section_end - 1);
             for (phys_addr_t p = first_frame; p <= last_frame; p += PAGE_SIZE) {
                 int err = frame_allocator_reserve_frame(p);
-                if (err != FRAME_ALLOCATOR_OK) {
-                    printf("%d\n", err);
+                if (err != FRAME_ALLOCATOR_OK)
                     PANIC("Unable to reserve kernel frames");
-                }
             }
         }
     }
@@ -51,7 +149,7 @@ void init_paging(section_info_t* section_info, size_t nr_sections)
     reserve_kernel_frames(section_info, nr_sections);
 
     phys_addr_t phys_addr_p4 = read_cr3();
-    p4 = kernel_static_from_phys_addr(phys_addr_p4);
+    page_table_t* p4 = kernel_static_from_phys_addr(phys_addr_p4);
 
     phys_addr_t phys_addr_init_p3 = PTE_FRAME(p4->entries[VA_P4_INDEX(&KERN_BASE)]);
     page_table_t* init_p3 = kernel_static_from_phys_addr(phys_addr_init_p3);
@@ -69,13 +167,18 @@ void init_paging(section_info_t* section_info, size_t nr_sections)
      */
     p4->entries[0] = init_p3->entries[0] = 0;
 
+    curr_pgdir.p4 = p4;
+
     flush_tlb_all();
+
+    memcpy(&kern_sections[0], section_info, nr_sections * sizeof(kern_sections[0]));
+    nr_kern_sections = nr_sections;
 }
 
 static int page_walk(virt_addr_t addr, page_table_level_t level, page_table_t** ret)
 {
     page_table_level_t curr_level = PAGE_TABLE_P4;
-    page_table_t* curr_page_table = p4;
+    page_table_t* curr_page_table = curr_pgdir.p4;
     while (1) {
         if (curr_level == level)
             break;
@@ -119,7 +222,7 @@ int paging_map_with_table_flags(virt_addr_t page, phys_addr_t frame, page_type_t
     parent_table_flags &= ~PTE_HP;
 
     page_table_level_t curr_level = PAGE_TABLE_P4;
-    page_table_t* curr_page_table = p4;
+    page_table_t* curr_page_table = curr_pgdir.p4;
     while (1) {
         if (curr_level == parent_level)
             break;
@@ -182,6 +285,16 @@ phys_addr_t paging_translate_page(virt_addr_t page, page_type_t type)
         return err;
 
     return PTE_FRAME(*pte);
+}
+
+pte_t paging_show_pte(virt_addr_t page, page_type_t type)
+{
+    pte_t* pte;
+    int err = get_pte(page, type, &pte);
+    if (err != PAGING_OK)
+        return err;
+
+    return *pte;
 }
 
 noignore int paging_update_flags(virt_addr_t page, page_type_t type, pte_flags_t flags)

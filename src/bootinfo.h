@@ -18,7 +18,7 @@ struct multiboot_info parse_mboot_info(void* mboot_info);
 typedef struct {
     char const* name;
     pte_flags_t flags;
-    phys_addr_t start, end;
+    virt_addr_t start, end;
     int present;
 } section_info_t;
 

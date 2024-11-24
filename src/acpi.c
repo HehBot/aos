@@ -90,7 +90,7 @@ acpi_info_t parse_acpi(struct multiboot_tag_old_acpi const* old_acpi_tag, struct
 
     phys_addr_t table_pa = rsdp->rsdt_pa;
     phys_addr_t table_frame = PTE_FRAME(table_pa);
-    int err = paging_map(mapping_addr, table_frame, PAGE_4KiB, PTE_P);
+    int err = paging_map(mapping_addr, table_frame, PAGE_4KiB, PTE_NX | PTE_P);
     if (err != PAGING_OK)
         PANIC("Unable to map rsdt");
     rsdt_t* rsdt = mapping_addr + PAGE_OFF(table_pa);
@@ -115,7 +115,7 @@ acpi_info_t parse_acpi(struct multiboot_tag_old_acpi const* old_acpi_tag, struct
         phys_addr_t table_pa = rsdt->other_sdt[i];
 
         phys_addr_t table_frame = PTE_FRAME(table_pa);
-        int err = paging_map(mapping_addr, table_frame, PAGE_4KiB, PTE_P);
+        int err = paging_map(mapping_addr, table_frame, PAGE_4KiB, PTE_NX | PTE_P);
         if (err != PAGING_OK)
             PANIC("Unable to map acpi table");
         acpi_sdt_header_t* h = mapping_addr + PAGE_OFF(table_pa);

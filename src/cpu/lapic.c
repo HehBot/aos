@@ -63,7 +63,7 @@ void init_lapic(virt_addr_t* mapping_addr_ptr, phys_addr_t lapic_addr)
 {
     lapic = *mapping_addr_ptr;
 
-    int err = paging_map(*mapping_addr_ptr, lapic_addr, PAGE_4KiB, PTE_W | PTE_P);
+    int err = paging_map(*mapping_addr_ptr, lapic_addr, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
     if (err != PAGING_OK)
         printf("Unable to map lapic register");
     *mapping_addr_ptr += PAGE_SIZE;

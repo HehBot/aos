@@ -198,10 +198,10 @@ enable_paging:
         or $(CR4_PAE), %eax
         mov %eax, %cr4
 
-        // set long mode bit in EFER MSR
+        // set long mode, NXE bits in EFER MSR
         mov $0xc0000080, %ecx
         rdmsr
-        or $(1<<8), %eax
+        or $(1 << 8 | 1 << 11), %eax
         wrmsr
 
         // enable paging and WP (Write Protect) in cr0

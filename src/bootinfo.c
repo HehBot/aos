@@ -25,10 +25,10 @@ typedef struct elf_section_header {
 void parse_elf_section_info(struct multiboot_tag_elf_sections const* e, section_info_t (*section_info)[4])
 {
     section_info_t si[4] = {
-        { ".text", PTE_NX, 0, 0, 0 },
-        { ".rodata", 0, 0, 0, 0 },
-        { ".data", PTE_W, 0, 0, 0 },
-        { ".bss", PTE_W, 0, 0, 0 },
+        { ".text", 0, 0, 0, 0 },
+        { ".rodata", PTE_NX, 0, 0, 0 },
+        { ".data", PTE_NX | PTE_W, 0, 0, 0 },
+        { ".bss", PTE_NX | PTE_W, 0, 0, 0 },
     };
 
     elf_section_header_t shstrtab = (void*)&e->sections[e->shndx * e->entsize];
@@ -40,8 +40,8 @@ void parse_elf_section_info(struct multiboot_tag_elf_sections const* e, section_
         char const* name = &strings[section->name];
         for (size_t i = 0; i < 4; ++i) {
             if (!memcmp(si[i].name, name, strlen(si[i].name))) {
-                si[i].start = section->addr;
-                si[i].end = section->addr + section->size;
+                si[i].start = (virt_addr_t)section->addr;
+                si[i].end = (virt_addr_t)section->addr + section->size;
                 si[i].present = 1;
                 break;
             }

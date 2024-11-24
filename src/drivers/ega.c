@@ -36,7 +36,7 @@ void init_ega(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t* mappi
             int err = frame_allocator_reserve_frame(frame);
             if (err != FRAME_ALLOCATOR_OK && err != FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME)
                 PANIC("Unable to reserve framebuffer frames");
-            err = paging_map(addr, frame, PAGE_4KiB, PTE_W | PTE_P);
+            err = paging_map(addr, frame, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
             if (err != PAGING_OK)
                 PANIC("Unable to map framebuffer frames");
         }

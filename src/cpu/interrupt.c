@@ -122,6 +122,8 @@ void excep(cpu_state_t* cpu_state)
             end += snprintf(&err_code_msg[end], len - end, "page not present, ");
         if (err_code & PTE_W)
             end += snprintf(&err_code_msg[end], len - end, "attempted write");
+        else if (err_code & 0x10)
+            end += snprintf(&err_code_msg[end], len - end, "attempted execution");
         else
             end += snprintf(&err_code_msg[end], len - end, "attempted read");
         break;
