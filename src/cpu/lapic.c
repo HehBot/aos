@@ -1,6 +1,7 @@
 #include "port.h"
 #include "x86.h"
 
+#include <memory/frame_allocator.h>
 #include <memory/paging.h>
 
 // Taken from xv6:lapic.c
@@ -60,10 +61,9 @@ static void lapic_write(size_t reg, uint32_t val)
 void init_lapic(virt_addr_t* mapping_addr_ptr, phys_addr_t lapic_addr)
 {
     lapic = *mapping_addr_ptr;
-
+    ASSERT(frame_allocator_reserve_frame(lapic_addr) == FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME);
     int err = paging_map(*mapping_addr_ptr, lapic_addr, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
-    if (err != PAGING_OK)
-        printf("Unable to map lapic register");
+    ASSERT(err == PAGING_OK);
     *mapping_addr_ptr += PAGE_SIZE;
 
     lapic_write(LAPIC_SVR, SW_ENABLE | (T_IRQ0 + IRQ_SPUR));

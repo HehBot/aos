@@ -2,6 +2,7 @@
 #include "kalloc.h"
 #include "paging.h"
 
+#include <cpu/spinlock.h>
 #include <cpu/x86.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -42,6 +43,7 @@ static inline void free_run(run_t* p)
 #define INIT_NR_PAGES 16
 #define NR_PAGES_INCREMENT 16
 
+static spinlock_t lock = {};
 static run_t* free_list;
 static run_t* free_list_end;
 static virt_addr_t end;
@@ -78,8 +80,8 @@ void init_kpalloc(virt_addr_t heap_start)
 
 void* kpalloc(size_t n)
 {
+    acquire(&lock);
     run_t* p = free_list;
-
     for (; p != NULL && p->nr_pages < n; p = p->next)
         ;
 
@@ -120,6 +122,7 @@ void* kpalloc(size_t n)
         }
 
         end += nr * PAGE_SIZE;
+        release(&lock);
         return kpalloc(n);
     } else if (p->nr_pages == n) {
         if (p->next != NULL)
@@ -147,16 +150,20 @@ void* kpalloc(size_t n)
         p->prev = NULL;
         occ_list = p;
     }
+    release(&lock);
     return p->addr;
 }
 
 int kpfree(virt_addr_t addr)
 {
+    acquire(&lock);
     run_t* p = occ_list;
     for (; p != NULL && p->addr != addr; p = p->next)
         ;
-    if (p == NULL)
+    if (p == NULL) {
+        release(&lock);
         return 0;
+    }
     if (p->next != NULL)
         p->next->prev = p->prev;
     if (p->prev != NULL)
@@ -208,5 +215,6 @@ int kpfree(virt_addr_t addr)
         else
             free_list_end = p;
     }
+    release(&lock);
     return 1;
 }

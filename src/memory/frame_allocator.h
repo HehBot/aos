@@ -18,6 +18,8 @@ enum {
     FRAME_ALLOCATOR_ERROR = 0xff,
 };
 
+void frame_allocator_enable_lock();
+
 noignore int frame_allocator_reserve_frame(phys_addr_t phys_addr);
 phys_addr_t frame_allocator_get_frame();
 noignore int frame_allocator_free_frame(phys_addr_t phys_addr);

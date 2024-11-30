@@ -37,6 +37,14 @@ void main(phys_addr_t phys_addr_mboot_info)
 
     init_paging(section_info, sizeof(section_info) / sizeof(section_info[0]));
 
+    /*
+     * all required physical frames have been reserved
+     * NOTE: device phy addresses are not
+     *          physical frames and so
+     *          will not be returned by
+     *          frame_allocator_get_frame
+     */
+
     virt_addr_t heap_start = (virt_addr_t)0xffff800000000000;
 
     init_ega(mboot_info.tag_framebuffer, &heap_start);
@@ -51,14 +59,11 @@ void main(phys_addr_t phys_addr_mboot_info)
      * now we can start using spinlocks
      */
     ega_enable_lock();
+    frame_allocator_enable_lock();
 
     init_ioapic(&heap_start, acpi_info.ioapic_addr, acpi_info.ioapic_id);
     ioapic_enable(IRQ_KBD, get_cpu()->lapic_id);
 
-    /*
-     * all required frames have been reserved
-     * now we can safely use frame_allocator_get_frame
-     */
     init_kpalloc(heap_start);
 
     pgdir_t kpgdir = paging_new_pgdir();

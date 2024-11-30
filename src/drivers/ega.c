@@ -34,7 +34,7 @@ void init_ega(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t* mappi
         phys_addr_t last_frame = PAGE_ROUND_DOWN(common->framebuffer_addr + fb_size - 1);
         for (phys_addr_t frame = first_frame; frame <= last_frame; frame += PAGE_SIZE, addr += PAGE_SIZE) {
             int err = frame_allocator_reserve_frame(frame);
-            ASSERT(err == FRAME_ALLOCATOR_OK || err == FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME);
+            ASSERT(err == FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME);
             err = paging_map(addr, frame, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
             ASSERT(err == PAGING_OK);
         }

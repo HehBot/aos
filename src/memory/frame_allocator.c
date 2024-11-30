@@ -2,16 +2,19 @@
 #include "kalloc.h"
 #include "page.h"
 
+#include <cpu/spinlock.h>
 #include <cpu/x86.h>
 #include <multiboot2.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
+static int locking = 0;
 typedef struct section {
     phys_addr_t first_frame, last_frame;
     size_t* bitmap; // 0 -> free, 1->occupied
     size_t nr_entries;
+    struct spinlock lock;
     struct section* next;
 } section_t;
 
@@ -42,6 +45,11 @@ static void add_physical_memory_region(phys_addr_t addr, uint64_t len)
         z->next = sections->next;
         sections->next = z;
     }
+}
+
+void frame_allocator_enable_lock()
+{
+    locking = 1;
 }
 
 void init_frame_allocator(struct multiboot_tag_mmap const* mmap_info)
@@ -115,6 +123,8 @@ phys_addr_t frame_allocator_get_frame()
 {
     section_t* p = sections;
     do {
+        if (locking)
+            acquire(&p->lock);
         uint64_t* bitmap = p->bitmap;
         for (size_t entry_index = 0; entry_index < p->nr_entries; ++entry_index) {
             if ((~bitmap[entry_index]) != 0) {
@@ -132,10 +142,13 @@ phys_addr_t frame_allocator_get_frame()
                     continue;
 
                 bitmap[entry_index] |= (((uint64_t)1) << bit_index_in_entry);
-
+                if (locking)
+                    release(&p->lock);
                 return frame;
             }
         }
+        if (locking)
+            release(&p->lock);
         p = p->next;
     } while (p != sections);
     return FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE;
@@ -176,6 +189,8 @@ int frame_allocator_free_frame(phys_addr_t addr)
     section_t* p = sections;
     phys_addr_t frame = PAGE_ROUND_DOWN(addr);
     do {
+        if (locking)
+            acquire(&p->lock);
         if (p->first_frame <= frame && p->last_frame >= frame) {
             size_t bit_index = (frame - p->first_frame) >> PAGE_ORDER;
 
@@ -188,12 +203,19 @@ int frame_allocator_free_frame(phys_addr_t addr)
             size_t bit_index_in_entry = (bit_index & (ENTRY_BITWIDTH - 1));
 
             uint8_t bit = ((*entry) >> bit_index_in_entry) & 1;
-            if (!bit)
+            if (!bit) {
+                if (locking)
+                    release(&p->lock);
                 return FRAME_ALLOCATOR_ERROR_ALREADY_FREED;
+            }
 
             *entry ^= (((uint64_t)1) << bit_index_in_entry);
+            if (locking)
+                release(&p->lock);
             return FRAME_ALLOCATOR_OK;
         }
+        if (locking)
+            release(&p->lock);
         p = p->next;
     } while (p != sections);
     return FRAME_ALLOCATOR_OK;
