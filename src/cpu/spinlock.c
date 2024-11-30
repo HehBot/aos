@@ -15,11 +15,9 @@ static void pushcli(void)
 }
 static void popcli(void)
 {
-    if (read_rflags() & RFLAGS_INT)
-        PANIC("popcli - interruptible");
+    ASSERT((read_rflags() & RFLAGS_INT) == 0);
     cpu_t* c = get_cpu();
-    if (c->ncli == 0)
-        PANIC("popcli");
+    ASSERT(c->ncli != 0);
     c->ncli--;
     if (c->ncli == 0 && c->interrut_enabled)
         enable_interrupts();
@@ -36,8 +34,7 @@ int holding(spinlock_t* lock)
 void acquire(spinlock_t* lock)
 {
     pushcli();
-    if (holding(lock))
-        PANIC("acquire");
+    ASSERT(!holding(lock));
 
     while (!__sync_bool_compare_and_swap(&lock->locked, 0, 1))
         ;
@@ -46,8 +43,7 @@ void acquire(spinlock_t* lock)
 }
 void release(spinlock_t* lock)
 {
-    if (!holding(lock))
-        PANIC("release");
+    ASSERT(holding(lock));
 
     __sync_synchronize();
     lock->locked = 0;

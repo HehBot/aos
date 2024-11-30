@@ -10,8 +10,7 @@ static uintptr_t top = (uintptr_t)&wheap[WHEAP_SIZE];
 
 void* kwmalloc(size_t sz)
 {
-    if ((uintptr_t)&base[sz] > top)
-        PANIC("kwmalloc failed");
+    ASSERT((uintptr_t)&base[sz] <= top);
     void* ans = base;
     base += sz;
     return ans;

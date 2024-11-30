@@ -74,9 +74,8 @@ static acpi_info_t parse_madt(madt_t const* madt)
 
 acpi_info_t parse_acpi(struct multiboot_tag_old_acpi const* old_acpi_tag, struct multiboot_tag_new_acpi const* new_acpi_tag, virt_addr_t* mapping_addr_ptr)
 {
-    if (old_acpi_tag == NULL && new_acpi_tag == NULL)
-        PANIC("No acpi tag found");
-    else if (old_acpi_tag == NULL)
+    ASSERT(old_acpi_tag != NULL || new_acpi_tag != NULL);
+    if (old_acpi_tag == NULL)
         PANIC("New acpi tag not supported");
 
     rsdp_t const* rsdp = (void const*)old_acpi_tag->rsdp;
@@ -91,8 +90,8 @@ acpi_info_t parse_acpi(struct multiboot_tag_old_acpi const* old_acpi_tag, struct
     phys_addr_t table_pa = rsdp->rsdt_pa;
     phys_addr_t table_frame = PTE_FRAME(table_pa);
     int err = paging_map(mapping_addr, table_frame, PAGE_4KiB, PTE_NX | PTE_P);
-    if (err != PAGING_OK)
-        PANIC("Unable to map rsdt");
+    ASSERT(err == PAGING_OK);
+
     rsdt_t* rsdt = mapping_addr + PAGE_OFF(table_pa);
 
     mapping_addr += PAGE_SIZE;
@@ -116,8 +115,8 @@ acpi_info_t parse_acpi(struct multiboot_tag_old_acpi const* old_acpi_tag, struct
 
         phys_addr_t table_frame = PTE_FRAME(table_pa);
         int err = paging_map(mapping_addr, table_frame, PAGE_4KiB, PTE_NX | PTE_P);
-        if (err != PAGING_OK)
-            PANIC("Unable to map acpi table");
+        ASSERT(err == PAGING_OK);
+
         acpi_sdt_header_t* h = mapping_addr + PAGE_OFF(table_pa);
 
         mapping_addr += PAGE_SIZE;
@@ -131,11 +130,8 @@ acpi_info_t parse_acpi(struct multiboot_tag_old_acpi const* old_acpi_tag, struct
     }
     printf("]\n");
 
-    for (virt_addr_t m = *mapping_addr_ptr; m < mapping_addr; m += PAGE_SIZE) {
-        int err = paging_unmap(m, PAGE_4KiB);
-        if ((err & ~PAGING_ERROR) == 0)
-            PANIC("Unable to unmap rsdt");
-    }
+    for (virt_addr_t m = *mapping_addr_ptr; m < mapping_addr; m += PAGE_SIZE)
+        ASSERT((paging_unmap(m, PAGE_4KiB) & PAGING_ERROR) == 0);
 
     return ret;
 }

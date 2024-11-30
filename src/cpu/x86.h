@@ -15,7 +15,16 @@ static inline void hlt()
     asm volatile("hlt");
 }
 
-_Noreturn __attribute__((format(printf, 1, 2))) void PANIC(char const* fmt, ...);
+_Noreturn __attribute__((format(printf, 1, 2))) void panic(char const* fmt, ...);
+    #define PANIC(fmt, ...)                                                                     \
+        do {                                                                                    \
+            panic("Panicked at " __FILE__ ":%d: %s:\n" fmt, __LINE__, __func__, ##__VA_ARGS__); \
+        } while (0)
+    #define ASSERT(x)                                  \
+        do {                                           \
+            if (!(x))                                  \
+                PANIC("Assertion `%s' failed.\n", #x); \
+        } while (0)
 
 static inline uint64_t read_rflags(void)
 {

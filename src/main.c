@@ -16,28 +16,6 @@
 #include <stdio.h>
 #include <string.h>
 
-// #define MAX_MODS 10
-// static mem_map_t mod_mem_map[MAX_MODS];
-// static size_t nr_mods = 0;
-// static void map_modules()
-// {
-//     for (size_t i = 0; i < nr_mods; ++i) {
-//         uintptr_t pa = mod_mem_map[i].phy_start;
-//         size_t nr_pages = PG_ROUND_UP(mod_mem_map[i].phy_end - pa) / PAGE_SIZE;
-//         size_t len = mod_mem_map[i].phy_end - pa;
-//         uintptr_t va = (uintptr_t)map_phy(pa, len, PTE_W);
-//         mod_mem_map[i].virt = va;
-//         mod_mem_map[i].nr_pages = nr_pages;
-//         mod_mem_map[i].mapped = 1;
-//     }
-// }
-
-void stack_overflow(size_t i)
-{
-    printf("%s %lx\n", __func__, i);
-    stack_overflow(i + 1);
-}
-
 void main(phys_addr_t phys_addr_mboot_info)
 {
     struct multiboot_info mboot_info = parse_mboot_info(kernel_static_from_phys_addr(phys_addr_mboot_info));
@@ -50,6 +28,12 @@ void main(phys_addr_t phys_addr_mboot_info)
     parse_elf_section_info(mboot_info.tag_elf_sections, &section_info);
 
     init_frame_allocator(mboot_info.tag_mmap);
+
+    struct multiboot_tag_module const* m = mboot_info.tag_initrd_module;
+    phys_addr_t mod_start_frame = PAGE_ROUND_DOWN(m->mod_start);
+    phys_addr_t mod_end_frame = PAGE_ROUND_DOWN(m->mod_end - 1);
+    for (phys_addr_t frame = mod_start_frame; frame <= mod_end_frame; frame += PAGE_SIZE)
+        ASSERT(frame_allocator_reserve_frame(frame) == FRAME_ALLOCATOR_OK);
 
     init_paging(section_info, sizeof(section_info) / sizeof(section_info[0]));
 
@@ -78,19 +62,6 @@ void main(phys_addr_t phys_addr_mboot_info)
     init_kpalloc(heap_start);
 
     pgdir_t kpgdir = paging_new_pgdir();
-
-    /*
-     * stack overflow test
-     */
-    // stack_overflow(0);
-
-    /*
-     * heap NXE test
-     */
-    // uint8_t* instr = kmalloc(20);
-    // instr[0] = 0x90;
-    // instr[1] = 0xc3;
-    // asm volatile("call %0"::"r"(instr));
 
     __sync_synchronize();
     enable_interrupts();

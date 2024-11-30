@@ -9,8 +9,7 @@ size_t nr_cpus = 0;
 
 cpu_t* get_cpu(void)
 {
-    if (read_rflags() & RFLAGS_INT)
-        PANIC("get_cpu - interruptible");
+    ASSERT((read_rflags() & RFLAGS_INT) == 0);
 
     uint8_t lapic_id(void);
     uint8_t id = lapic_id();
@@ -18,6 +17,7 @@ cpu_t* get_cpu(void)
     for (size_t i = 0; i < nr_cpus; ++i)
         if (cpus[i].lapic_id == id)
             return &cpus[i];
+
     PANIC("lapic_id() does not match with any CPU");
 }
 uint8_t cpu_id(void)

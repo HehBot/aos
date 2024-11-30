@@ -34,11 +34,9 @@ void init_ega(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t* mappi
         phys_addr_t last_frame = PAGE_ROUND_DOWN(common->framebuffer_addr + fb_size - 1);
         for (phys_addr_t frame = first_frame; frame <= last_frame; frame += PAGE_SIZE, addr += PAGE_SIZE) {
             int err = frame_allocator_reserve_frame(frame);
-            if (err != FRAME_ALLOCATOR_OK && err != FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME)
-                PANIC("Unable to reserve framebuffer frames");
+            ASSERT(err == FRAME_ALLOCATOR_OK || err == FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME);
             err = paging_map(addr, frame, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
-            if (err != PAGING_OK)
-                PANIC("Unable to map framebuffer frames");
+            ASSERT(err == PAGING_OK);
         }
         *mapping_addr_ptr = addr;
     }
@@ -153,7 +151,7 @@ void ega_putc(char character)
     ega_putc_spl(character, -1, -1, EGA_COLOR_BLACK, EGA_COLOR_WHITE);
 }
 
-void __attribute__((format(printf, 1, 2))) PANIC(char const* fmt, ...)
+void __attribute__((format(printf, 1, 2))) panic(char const* fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);

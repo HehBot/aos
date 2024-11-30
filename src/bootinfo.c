@@ -47,8 +47,8 @@ void parse_elf_section_info(struct multiboot_tag_elf_sections const* e, section_
             }
         }
     }
-    if (!si[0].present)
-        PANIC("No text section");
+    ASSERT(si[0].present);
+
     /*
      * coalesce .data and .bss, we know they will be consecutive
      */
@@ -91,6 +91,9 @@ struct multiboot_info parse_mboot_info(void* mboot_info)
             goto end;
         case MULTIBOOT_TAG_TYPE_ACPI_OLD:
             info.tag_old_acpi = (void*)tag;
+            goto end;
+        case MULTIBOOT_TAG_TYPE_MODULE:
+            info.tag_initrd_module = (void*)tag;
             goto end;
         end:
         default:

@@ -20,8 +20,6 @@
 #define INIT 0x00000500 // INIT/RESET
 #define STARTUP 0x00000600 // Startup IPI
 #define DELIVS 0x00001000 // Delivery status
-#define ASSERT 0x00004000 // Assert interrupt (vs deassert)
-#define DEASSERT 0x00000000
 #define LEVEL 0x00008000 // Level triggered
 #define BCAST 0x00080000 // Send to all LAPICs, including self.
 #define BUSY 0x00001000

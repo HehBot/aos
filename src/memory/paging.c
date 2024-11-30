@@ -47,22 +47,19 @@ pgdir_t paging_new_pgdir()
          * add kernel mappping
          */
         phys_addr_t phys_addr_p3 = frame_allocator_get_frame();
-        if (phys_addr_p3 == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
-            PANIC("Unable to allocate frame for new p3");
+        ASSERT((phys_addr_p3 & FRAME_ALLOCATOR_ERROR) == 0);
         new_pgdir.p4->entries[VA_P4_INDEX(&KERN_BASE)] = PTE(phys_addr_p3, PTE_W | PTE_P);
 
         page_table_t* p3 = map_temp(phys_addr_p3);
         memset(p3, 0, sizeof(*p3));
         phys_addr_t phys_addr_p2 = frame_allocator_get_frame();
-        if (phys_addr_p2 == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
-            PANIC("Unable to allocate frame for new p2");
+        ASSERT((phys_addr_p2 & FRAME_ALLOCATOR_ERROR) == 0);
         p3->entries[VA_P3_INDEX(&KERN_BASE)] = PTE(phys_addr_p2, PTE_W | PTE_P);
 
         page_table_t* p2 = map_temp(phys_addr_p2);
         memset(p2, 0, sizeof(*p2));
         phys_addr_t phys_addr_p1 = frame_allocator_get_frame();
-        if (phys_addr_p1 == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
-            PANIC("Unable to allocate frame for new p2");
+        ASSERT((phys_addr_p1 & FRAME_ALLOCATOR_ERROR) == 0);
         p2->entries[VA_P2_INDEX(&KERN_BASE)] = PTE(phys_addr_p1, PTE_W | PTE_P);
         /*
          * add p1 of temp buf
@@ -104,10 +101,8 @@ pgdir_t paging_new_pgdir()
         for (size_t i = 0; i < 3; ++i) {
             virt_addr_t old_p = kernel_static_from_phys_addr(old_phys[i]);
             phys_addr_t frame = paging_unmap(old_p, PAGE_4KiB);
-            if (frame & PAGING_ERROR)
-                PANIC("Unable to unmap boot kernel pgdir");
-            if (frame_allocator_free_frame(frame) != FRAME_ALLOCATOR_OK)
-                PANIC("Unable to free frames");
+            ASSERT((frame & PAGING_ERROR) == 0);
+            ASSERT(frame_allocator_free_frame(frame) == FRAME_ALLOCATOR_OK);
         }
 
         kern_pgdir_setup = 1;
@@ -115,8 +110,8 @@ pgdir_t paging_new_pgdir()
     } else {
         pgdir_t new_pgdir;
         new_pgdir.p4 = kpalloc(1);
-        if (new_pgdir.p4 == NULL)
-            PANIC("kpalloc failed");
+        ASSERT(new_pgdir.p4 != NULL);
+
         memcpy(new_pgdir.p4, curr_pgdir.p4, sizeof(*new_pgdir.p4));
         return new_pgdir;
     }
@@ -130,11 +125,8 @@ static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sectio
             phys_addr_t section_end = phys_addr_of_kernel_static((virt_addr_t)section_info[i].end);
             phys_addr_t first_frame = PAGE_ROUND_DOWN(section_start);
             phys_addr_t last_frame = PAGE_ROUND_DOWN(section_end - 1);
-            for (phys_addr_t p = first_frame; p <= last_frame; p += PAGE_SIZE) {
-                int err = frame_allocator_reserve_frame(p);
-                if (err != FRAME_ALLOCATOR_OK)
-                    PANIC("Unable to reserve kernel frames");
-            }
+            for (phys_addr_t p = first_frame; p <= last_frame; p += PAGE_SIZE)
+                ASSERT(frame_allocator_reserve_frame(p) == FRAME_ALLOCATOR_OK);
         }
     }
 }
@@ -142,9 +134,8 @@ static void reserve_kernel_frames(section_info_t* section_info, size_t nr_sectio
 void init_paging(section_info_t* section_info, size_t nr_sections)
 {
     extern void* KERN_BASE;
-    if (VA_P4_INDEX(&KERN_BASE) != VA_P4_INDEX(buf_page)
-        || VA_P3_INDEX(&KERN_BASE) != VA_P3_INDEX(buf_page))
-        PANIC("Bad buf_page address");
+    ASSERT(VA_P4_INDEX(&KERN_BASE) == VA_P4_INDEX(buf_page)
+           && VA_P3_INDEX(&KERN_BASE) == VA_P3_INDEX(buf_page));
 
     reserve_kernel_frames(section_info, nr_sections);
 

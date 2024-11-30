@@ -15,6 +15,7 @@ enum {
     FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME,
     FRAME_ALLOCATOR_ERROR_ALREADY_FREED,
     FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE,
+    FRAME_ALLOCATOR_ERROR = 0xff,
 };
 
 noignore int frame_allocator_reserve_frame(phys_addr_t phys_addr);

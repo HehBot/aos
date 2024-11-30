@@ -10,6 +10,7 @@ struct multiboot_info {
     struct multiboot_tag_framebuffer const* tag_framebuffer;
     struct multiboot_tag_old_acpi const* tag_old_acpi;
     struct multiboot_tag_new_acpi const* tag_new_acpi;
+    struct multiboot_tag_module const* tag_initrd_module;
     size_t size_reserved;
 };
 
