@@ -44,7 +44,7 @@
 #define PORT_8259APIC_SLAVE_CTRL (PORT_8259APIC_SLAVE)
 #define PORT_8259APIC_SLAVE_DATA (PORT_8259APIC_SLAVE + 1)
 
-static uint32_t volatile* lapic;
+uint32_t volatile* lapic;
 
 static uint32_t lapic_read(size_t reg)
 {

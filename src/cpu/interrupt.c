@@ -30,9 +30,7 @@ static inline void set_idt_entry(size_t n, void (*isr)(void), uint8_t gate_type,
 void init_idt()
 {
     for (size_t i = 0; i < NR_ISRS; ++i)
-        set_idt_entry(i, isrs[i], GATE_TYPE_INT, KERNEL_PL, 0);
-    set_idt_entry(T_DOUBLE_FAULT, isrs[T_DOUBLE_FAULT], GATE_TYPE_INT, KERNEL_PL, DOUBLE_FAULT_IST + 1);
-    set_idt_entry(T_SYSCALL, isrs[T_SYSCALL], GATE_TYPE_TRAP, USER_PL, 0);
+        set_idt_entry(i, isrs[i], GATE_TYPE_INT, KERNEL_PL, INTERRUPT_IST + 1);
 }
 
 void load_idt()
@@ -85,7 +83,7 @@ void excep(cpu_state_t* cpu_state)
     if (int_no == T_BREAKPOINT)
         return;
 
-    char err_code_msg[100];
+    char err_code_msg[100] = {};
     int end = 0;
     int const len = sizeof(err_code_msg);
 
@@ -115,7 +113,7 @@ void excep(cpu_state_t* cpu_state)
         break;
     case 14:
         // https://wiki.osdev.org/Exceptions#Page_Fault
-        end += snprintf(&err_code_msg[end], len - end, "At address %p: ", read_cr2());
+        end += snprintf(&err_code_msg[end], len - end, "At address %p:\n  ", read_cr2());
         if (err_code & PTE_P)
             end += snprintf(&err_code_msg[end], len - end, "protection violation, ");
         else
@@ -126,13 +124,16 @@ void excep(cpu_state_t* cpu_state)
             end += snprintf(&err_code_msg[end], len - end, "attempted execution");
         else
             end += snprintf(&err_code_msg[end], len - end, "attempted read");
+        if (err_code & PTE_U)
+            end += snprintf(&err_code_msg[end], len - end, " from user mode");
+        if (err_code & 0x8)
+            end += snprintf(&err_code_msg[end], len - end, "\n  (reserved bit set in a PTE)");
         break;
     }
 
     PANIC("\
 Exception: %s\n\
 %s\n\
-\n\
 Registers at exception:\n\
   rax: 0x%lx rbx: 0x%lx\n\
   rcx: 0x%lx rdx: 0x%lx\n\
@@ -145,6 +146,7 @@ Registers at exception:\n\
 \n\
   rip:  0x%lx\n\
   cs:   0x%lx\n\
+  ss:   0x%lx\n\
 \n\
   Interrupt Number: ........ %u\n\
   Error Code: .............. 0x%x\n\
@@ -157,17 +159,9 @@ Registers at exception:\n\
           cpu_state->r8, cpu_state->r9, cpu_state->r10, cpu_state->r11,
           cpu_state->r12, cpu_state->r13, cpu_state->r14, cpu_state->r15,
           cpu_state->rip,
-          cpu_state->cs, int_no, err_code, cpu_state->rflags);
-}
-
-void syscall(cpu_state_t* cpu_state)
-{
-    printf("Syscall number %lx\n", cpu_state->rax);
-    // if (cpu_state->eax == 0) {
-    //     char* z = (char*)cpu_state->ebx;
-    //     for (size_t i = 0; i < cpu_state->ecx; ++i)
-    //         printf("%c", z[i]);
-    // }
+          cpu_state->cs,
+          cpu_state->ss,
+          int_no, err_code, cpu_state->rflags);
 }
 
 void isr_common(cpu_state_t* cpu_state)
@@ -178,9 +172,6 @@ void isr_common(cpu_state_t* cpu_state)
         excep(cpu_state);
     else {
         switch (int_no) {
-        case T_SYSCALL:
-            syscall(cpu_state);
-            break;
         case T_IRQ0 + IRQ_KBD:
             keyboard_callback(cpu_state);
             lapic_eoi();

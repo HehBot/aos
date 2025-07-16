@@ -3,6 +3,7 @@
 #include <cpu/interrupt.h>
 #include <cpu/ioapic.h>
 #include <cpu/mp.h>
+#include <cpu/spinlock.h>
 #include <cpu/x86.h>
 #include <drivers/ega.h>
 #include <fs/fs.h>
@@ -15,6 +16,95 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#define NTASK 20
+
+typedef struct task {
+    size_t tid;
+
+    virt_addr_t user_stack;
+    virt_addr_t kernel_stack;
+
+    virt_addr_t rip;
+
+    enum {
+        TASK_S_INVALID = 0,
+        TASK_S_READY,
+        TASK_S_RUNNING,
+    } state;
+
+    pgdir_t pgdir;
+} task_t;
+
+struct {
+    task_t list[NTASK];
+    spinlock_t lock;
+} tasks = {};
+
+void setup_task(fs_node_t* prog, int tid, int slot)
+{
+    size_t nr_pages = PAGE_ROUND_UP(prog->length) / PAGE_SIZE;
+
+    char* z = (virt_addr_t)0x0;
+
+    for (size_t i = 0; i < nr_pages; ++i) {
+        phys_addr_t frame = frame_allocator_get_frame();
+        ASSERT((frame & FRAME_ALLOCATOR_ERROR) == 0);
+        ASSERT(paging_map(z + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_U | PTE_W | PTE_P) == PAGING_OK);
+    }
+
+    read_fs(prog, 0, prog->length, z);
+
+    void* kernel_stack = kpalloc(3);
+    phys_addr_t frame = paging_unmap(kernel_stack, PAGE_4KiB);
+    ASSERT((frame & PAGING_ERROR) == 0);
+    ASSERT(frame_allocator_free_frame(frame) == FRAME_ALLOCATOR_OK);
+    kernel_stack = kernel_stack + 3 * PAGE_SIZE;
+
+    tasks.list[slot] = (task_t) {
+        .tid = tid,
+        .kernel_stack = kernel_stack,
+        .rip = z,
+        .state = TASK_S_READY,
+    };
+}
+
+void swtch(task_t* t)
+{
+    asm volatile(
+        "pushfq;"
+        "pop %%r11;"
+        "mov %q0, %%rsp;"
+        "mov %q1, %%rcx;"
+        "sysretq"
+        :
+        : "r"(t->user_stack), "r"(t->rip));
+}
+
+void sched()
+{
+    acquire(&tasks.lock);
+
+    cpu_t* c = get_cpu();
+    ASSERT(c->curr_task != NULL);
+
+    task_t* next_task = NULL;
+
+    for (int i = 0; i < NTASK; ++i) {
+        if (tasks.list[i].state == TASK_S_READY) {
+            next_task = &tasks.list[i];
+            break;
+        }
+    }
+    if (next_task != NULL) {
+        c->curr_task->state = TASK_S_READY;
+        c->curr_task = next_task;
+        c->curr_task->state = TASK_S_RUNNING;
+    }
+    release(&tasks.lock);
+
+    swtch(c->curr_task);
+}
 
 void main(phys_addr_t phys_addr_mboot_info)
 {
@@ -52,6 +142,10 @@ void main(phys_addr_t phys_addr_mboot_info)
     acpi_info_t acpi_info = parse_acpi(mboot_info.tag_old_acpi, mboot_info.tag_new_acpi, &heap_start);
     init_lapic(&heap_start, acpi_info.lapic_addr);
 
+    virt_addr_t initrd_start = heap_start;
+    for (phys_addr_t frame = mod_start_frame; frame <= mod_end_frame; heap_start += PAGE_SIZE, frame += PAGE_SIZE)
+        ASSERT(paging_map(heap_start, frame, PAGE_4KiB, PTE_P | PTE_W | PTE_U) == PAGING_OK);
+
     init_idt();
     init_cpu(); // needs get_cpu which needs lapic initialised
 
@@ -68,9 +162,38 @@ void main(phys_addr_t phys_addr_mboot_info)
 
     pgdir_t kpgdir = paging_new_pgdir();
 
+    fs_node_t* root = read_initrd(initrd_start);
+
+    fs_node_t* user_prog = find_dir_fs(root, "user_prog");
+
+    setup_task(user_prog, 1, 0);
+    get_cpu()->curr_task = &tasks.list[0];
+
     __sync_synchronize();
     enable_interrupts();
 
+    sched();
+
     while (1)
         hlt();
+}
+
+typedef struct {
+    size_t nr;
+    size_t args[6];
+} __attribute__((packed)) syscall_t;
+
+void syscall_handler(syscall_t* s)
+{
+    switch (s->nr) {
+    case 0: {
+        char* str = kmalloc(s->args[1] + 1);
+        memcpy(str, (virt_addr_t)s->args[0], s->args[1]);
+        str[s->args[1]] = '\0';
+        printf("%s", str);
+        kfree(s);
+    } break;
+    default:
+        printf("[unknown syscall#%lu]\n", s->nr);
+    }
 }

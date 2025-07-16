@@ -4,6 +4,7 @@
 .globl long_mode_start
 .extern main
 .extern KERN_BASE
+.globl stack
 
 
 .section .bss

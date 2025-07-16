@@ -6,16 +6,25 @@
 #include <stddef.h>
 #include <stdint.h>
 
+typedef struct task task_t;
+
 typedef struct {
+    task_t* curr_task;
+
     int ncli;
     int interrut_enabled;
 
     gdt_entry_t gdt[NR_GDT_ENTRIES];
     tss_t tss;
 
+    struct {
+        uint64_t _scratch_rsp;
+        uint64_t kstack_rsp;
+    } __attribute__((packed)) syscall_info;
+
     uint8_t acpi_proc_id;
     uint8_t lapic_id;
-    uint8_t ist_stack[2000];
+    uint8_t kstack[1200] __attribute__((aligned(16)));
 } cpu_t;
 
 #define MAX_CPUS 32

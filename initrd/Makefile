@@ -4,7 +4,7 @@ FILE_NAMES := $(shell ls $(DIR))
 FILES := $(FILE_NAMES:%=$(DIR)/%)
 
 initrd.img: geninitrd $(FILES)
-	./$< $$(for i in $(FILE_NAMES); do echo $(DIR)/$$i initrd_$$i; done)
+	./$< $$(for i in $(FILE_NAMES); do echo $(DIR)/$$i $$i; done)
 
 geninitrd: geninitrd.c
 	@gcc -o $@ $<

@@ -41,30 +41,30 @@ pgdir_t paging_new_pgdir()
         /*
          * add heap mapping
          */
-        new_pgdir.p4->entries[256] = PTE(PTE_FRAME(curr_pgdir.p4->entries[256]), PTE_W | PTE_P);
+        new_pgdir.p4->entries[256] = PTE(PTE_FRAME(curr_pgdir.p4->entries[256]), PTE_U | PTE_W | PTE_P);
 
         /*
          * add kernel mappping
          */
         phys_addr_t phys_addr_p3 = frame_allocator_get_frame();
         ASSERT((phys_addr_p3 & FRAME_ALLOCATOR_ERROR) == 0);
-        new_pgdir.p4->entries[VA_P4_INDEX(&KERN_BASE)] = PTE(phys_addr_p3, PTE_W | PTE_P);
+        new_pgdir.p4->entries[VA_P4_INDEX(&KERN_BASE)] = PTE(phys_addr_p3, PTE_U | PTE_W | PTE_P);
 
         page_table_t* p3 = map_temp(phys_addr_p3);
         memset(p3, 0, sizeof(*p3));
         phys_addr_t phys_addr_p2 = frame_allocator_get_frame();
         ASSERT((phys_addr_p2 & FRAME_ALLOCATOR_ERROR) == 0);
-        p3->entries[VA_P3_INDEX(&KERN_BASE)] = PTE(phys_addr_p2, PTE_W | PTE_P);
+        p3->entries[VA_P3_INDEX(&KERN_BASE)] = PTE(phys_addr_p2, PTE_U | PTE_W | PTE_P);
 
         page_table_t* p2 = map_temp(phys_addr_p2);
         memset(p2, 0, sizeof(*p2));
         phys_addr_t phys_addr_p1 = frame_allocator_get_frame();
         ASSERT((phys_addr_p1 & FRAME_ALLOCATOR_ERROR) == 0);
-        p2->entries[VA_P2_INDEX(&KERN_BASE)] = PTE(phys_addr_p1, PTE_W | PTE_P);
+        p2->entries[VA_P2_INDEX(&KERN_BASE)] = PTE(phys_addr_p1, PTE_U | PTE_W | PTE_P);
         /*
          * add p1 of temp buf
          */
-        p2->entries[VA_P2_INDEX(buf_page)] = PTE(phys_addr_of_kernel_static(&map_temp_p1), PTE_W | PTE_P);
+        p2->entries[VA_P2_INDEX(buf_page)] = PTE(phys_addr_of_kernel_static(&map_temp_p1), PTE_U | PTE_W | PTE_P);
 
         page_table_t* p1 = map_temp(phys_addr_p1);
         memset(p1, 0, sizeof(*p1));
@@ -226,7 +226,7 @@ int paging_map_with_table_flags(virt_addr_t page, phys_addr_t frame, page_type_t
             if (new_frame == FRAME_ALLOCATOR_ERROR_NO_FRAME_AVAILABLE)
                 return PAGING_ERROR_FRAME_ALLOCATION_FAILURE;
 
-            *pte = PTE(new_frame, (parent_table_flags | PTE_P | PTE_W));
+            *pte = PTE(new_frame, (parent_table_flags | PTE_U | PTE_W | PTE_P));
             clear_new_table = 1;
         } else if ((*pte) & PTE_HP)
             return PAGING_ERROR_PARENT_ENTRY_MARKED_HP;
@@ -251,7 +251,7 @@ int paging_map_with_table_flags(virt_addr_t page, phys_addr_t frame, page_type_t
 
 int paging_map(virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags)
 {
-    return paging_map_with_table_flags(page, frame, type, flags, PTE_W | PTE_P);
+    return paging_map_with_table_flags(page, frame, type, flags, PTE_U | PTE_W | PTE_P);
 }
 
 phys_addr_t paging_unmap(virt_addr_t page, page_type_t type)

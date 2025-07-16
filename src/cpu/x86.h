@@ -80,7 +80,6 @@ static inline void lidt(idt_entry_t* idt, uint16_t size)
 
 #define T_BREAKPOINT 0x03
 #define T_DOUBLE_FAULT 0x08
-#define T_SYSCALL 0x80
 #define T_IRQ0 0x20
 
 #define IRQ_TIMER 0
@@ -129,7 +128,7 @@ typedef union gdt_entry {
 } __attribute__((packed)) gdt_entry_t;
     #define GDT_STRIDE (sizeof(gdt_entry_t))
 
-    #define DOUBLE_FAULT_IST 0
+    #define INTERRUPT_IST 0
 
 typedef struct tss {
     uint32_t : 32;
@@ -172,7 +171,7 @@ typedef struct tss {
             .base_upper_32 = (((uintptr_t)(tss)) >> 32), \
         }
 
-static inline void lgdt(gdt_entry_t* gdt, uint16_t size, uint16_t cs)
+static inline void lgdt(gdt_entry_t* gdt, uint16_t size, uint16_t cs, uint16_t ds)
 {
     typedef struct gdt_desc {
         uint16_t size_m_1;
@@ -185,7 +184,13 @@ static inline void lgdt(gdt_entry_t* gdt, uint16_t size, uint16_t cs)
         "mov $1f, %q2; "
         "push %q2; "
         "retfq; "
-        "1:" : : "r"(cs), "r"(&gdtd), "r"(0));
+        "1:"
+        "mov %w3, %%ds; "
+        "mov %w3, %%es; "
+        "mov %w3, %%fs; "
+        "mov %w3, %%gs; "
+        "mov %w3, %%ss; "
+        : : "r"(cs), "r"(&gdtd), "r"(0), "r"(ds));
 }
 static inline void ltr(uint16_t tss_seg)
 {
@@ -200,8 +205,8 @@ static inline void ltr(uint16_t tss_seg)
 
 #define KERNEL_CODE_GDT_INDEX 1
 #define KERNEL_DATA_GDT_INDEX 2
-#define USER_CODE_GDT_INDEX 3
-#define USER_DATA_GDT_INDEX 4
+#define USER_DATA_GDT_INDEX 3
+#define USER_CODE_GDT_INDEX 4
 #define TSS_GDT_INDEX 5
 
 #define KERNEL_PL 0
@@ -209,8 +214,8 @@ static inline void ltr(uint16_t tss_seg)
 
 #define KERNEL_CODE_SEG ((KERNEL_CODE_GDT_INDEX * GDT_STRIDE) | KERNEL_PL)
 #define KERNEL_DATA_SEG ((KERNEL_DATA_GDT_INDEX * GDT_STRIDE) | KERNEL_PL)
-#define USER_CODE_SEG ((USER_CODE_GDT_INDEX * GDT_STRIDE) | USER_PL)
 #define USER_DATA_SEG ((USER_DATA_GDT_INDEX * GDT_STRIDE) | USER_PL)
+#define USER_CODE_SEG ((USER_CODE_GDT_INDEX * GDT_STRIDE) | USER_PL)
 #define TSS_SEG ((TSS_GDT_INDEX * GDT_STRIDE) | KERNEL_PL)
 
 // Memory and Paging
@@ -219,8 +224,11 @@ static inline void ltr(uint16_t tss_seg)
 #define CR0_PG 0x80000000
 
 #ifndef __ASSEMBLER__
-    // #include <mem/mm.h>
+
+_Static_assert(USER_DATA_GDT_INDEX + 1 == USER_CODE_GDT_INDEX, "Bad user segments");
+
     #include <memory/page.h>
+
 static inline void write_cr3(phys_addr_t p4_phys_addr)
 {
     asm volatile("mov %q0, %%cr3" ::"r"(p4_phys_addr) : "memory");

@@ -20,6 +20,6 @@ typedef struct {
 
 // Initialises the initial ramdisk. It gets passed the address of the multiboot module,
 // and returns a completed filesystem node.
-fs_node_t* read_initrd(uintptr_t location);
+fs_node_t* read_initrd(void* location);
 
 #endif // INITRD_H

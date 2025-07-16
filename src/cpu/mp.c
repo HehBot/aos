@@ -31,26 +31,34 @@ static void init_gdt(cpu_t* c)
     memset(&c->tss, 0, sizeof(c->tss));
 
     c->gdt[KERNEL_CODE_GDT_INDEX] = SEG(KERNEL_PL, 1, 0);
+    c->gdt[KERNEL_DATA_GDT_INDEX] = SEG(KERNEL_PL, 0, 1);
     c->gdt[USER_CODE_GDT_INDEX] = SEG(USER_PL, 1, 0);
+    c->gdt[USER_DATA_GDT_INDEX] = SEG(USER_PL, 0, 1);
     c->gdt[TSS_GDT_INDEX] = SEG_TSS1(KERNEL_PL, (uintptr_t)&c->tss, sizeof(c->tss));
     c->gdt[TSS_GDT_INDEX + 1] = SEG_TSS2((uintptr_t)&c->tss);
 
-    c->tss.ist[DOUBLE_FAULT_IST] = ((uintptr_t)&c->ist_stack) + sizeof(c->ist_stack);
+    c->tss.ist[INTERRUPT_IST] = ((uintptr_t)&c->kstack[0]) + sizeof(c->kstack);
     c->tss.iomap_base = sizeof(tss_t);
 
     // to verify that excep_stack is indeed used, uncomment
-    //      the next line and see that `int $T_DOUBLE_FAULT` causes #GPF
-    // c->tss.ist[DOUBLE_FAULT_IST] = 0x8ffffffffffff;
+    //      the next line and see that any interrupt causes #GPF
+    // c->tss.ist[INTERRUPT_IST] = 0x8ffffffffffff;
 }
+
+void init_syscall_sysret(uintptr_t kstack);
 
 void init_cpu(void)
 {
     cpu_t* c = get_cpu();
 
     init_gdt(c);
-    lgdt(&c->gdt[0], sizeof(c->gdt), KERNEL_CODE_SEG);
+    lgdt(&c->gdt[0], sizeof(c->gdt), KERNEL_CODE_SEG, KERNEL_DATA_SEG);
     ltr(TSS_SEG);
+
+    c->syscall_info.kstack_rsp = (uintptr_t)&c->kstack[0] + sizeof(c->kstack);
+    init_syscall_sysret((uintptr_t)&c->syscall_info);
 
     load_idt();
     printf("[Started cpu %d]\n", c->acpi_proc_id);
+    c->curr_task = NULL;
 }

@@ -21,7 +21,7 @@ static size_t initrd_read(fs_node_t* node, size_t offset, size_t size, void* buf
         return 0;
     if (offset + size > header.length)
         size = header.length - offset;
-    memcpy(buffer, (void*)(header.offset + offset), size);
+    memcpy(buffer, (void*)(initrd_header) + header.offset + offset, size);
     return size;
 }
 
@@ -52,7 +52,7 @@ static fs_node_t* initrd_find_dir(fs_node_t* node, char const* name)
     return NULL;
 }
 
-fs_node_t* read_initrd(uintptr_t location)
+fs_node_t* read_initrd(void* location)
 {
     // Initialise the main and file header pointers and populate the root directory.
     initrd_header = (initrd_header_t*)location;
@@ -81,10 +81,6 @@ fs_node_t* read_initrd(uintptr_t location)
 
     // For every file...
     for (size_t i = 0; i < initrd_header->nfiles; i++) {
-        // Edit the file's header - currently it holds the file offset
-        // relative to the start of the ramdisk. We want it relative to the start
-        // of memory.
-        file_headers[i].offset += location;
         // Create a new file node.
         strcpy((char*)root_nodes[i].name, (char const*)file_headers[i].name);
         root_nodes[i].mask = root_nodes[i].uid = root_nodes[i].gid = 0;
@@ -95,6 +91,7 @@ fs_node_t* read_initrd(uintptr_t location)
         root_nodes[i].open = NULL;
         root_nodes[i].close = NULL;
         root_nodes[i].impl = 0;
+        root_nodes[i].inode = i;
     }
 
     return initrd_root;
