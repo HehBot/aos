@@ -38,7 +38,7 @@ void load_idt()
     lidt(&idt[0], sizeof(idt));
 }
 
-void excep(cpu_state_t* cpu_state)
+void excep(context_t* context)
 {
     static char const* exception_messages[32] = {
         "Division By Zero",
@@ -78,7 +78,7 @@ void excep(cpu_state_t* cpu_state)
         "Reserved"
     };
 
-    int int_no = cpu_state->int_no, err_code = cpu_state->err_code;
+    int int_no = context->int_no, err_code = context->err_code;
 
     if (int_no == T_BREAKPOINT)
         return;
@@ -135,18 +135,12 @@ void excep(cpu_state_t* cpu_state)
 Exception: %s\n\
 %s\n\
 Registers at exception:\n\
-  rax: 0x%lx rbx: 0x%lx\n\
-  rcx: 0x%lx rdx: 0x%lx\n\
-  rdi: 0x%lx rsi: 0x%lx\n\
-  rbp: 0x%lx rsp: 0x%lx\n\
-  r8 : 0x%lx r9 : 0x%lx\n\
-  r10: 0x%lx r11: 0x%lx\n\
-  r12: 0x%lx r13: 0x%lx\n\
-  r14: 0x%lx r15: 0x%lx\n\
+  rax: 0x%lx rbx: 0x%lx rcx: 0x%lx rdx: 0x%lx\n\
+  rdi: 0x%lx rsi: 0x%lx rbp: 0x%lx rsp: 0x%lx\n\
+  r8 : 0x%lx r9 : 0x%lx r10: 0x%lx r11: 0x%lx\n\
+  r12: 0x%lx r13: 0x%lx r14: 0x%lx r15: 0x%lx\n\
 \n\
-  rip:  0x%lx\n\
-  cs:   0x%lx\n\
-  ss:   0x%lx\n\
+  rip: 0x%lx cs: 0x%hx ss: 0x%hx\n\
 \n\
   Interrupt Number: ........ %u\n\
   Error Code: .............. 0x%x\n\
@@ -154,37 +148,40 @@ Registers at exception:\n\
 ",
           exception_messages[int_no],
           err_code_msg,
-          cpu_state->rax, cpu_state->rbx, cpu_state->rcx, cpu_state->rdx,
-          cpu_state->rdi, cpu_state->rsi, cpu_state->rbp, cpu_state->rsp,
-          cpu_state->r8, cpu_state->r9, cpu_state->r10, cpu_state->r11,
-          cpu_state->r12, cpu_state->r13, cpu_state->r14, cpu_state->r15,
-          cpu_state->rip,
-          cpu_state->cs,
-          cpu_state->ss,
-          int_no, err_code, cpu_state->rflags);
+          context->rax, context->rbx, context->rcx, context->rdx,
+          context->rdi, context->rsi, context->rbp, context->rsp,
+          context->r8, context->r9, context->r10, context->r11,
+          context->r12, context->r13, context->r14, context->r15,
+          context->rip, context->cs, context->ss,
+          int_no, err_code, context->rflags);
 }
 
-void isr_common(cpu_state_t* cpu_state)
+context_t* schedule_next(context_t* context);
+
+context_t* isr_common(context_t* context)
 {
-    int int_no = cpu_state->int_no;
-    void keyboard_callback(cpu_state_t*);
+    context_t* new_context = NULL;
+    int int_no = context->int_no;
+    void keyboard_callback(context_t*);
     if (int_no < 32)
-        excep(cpu_state);
+        excep(context);
     else {
         switch (int_no) {
         case T_IRQ0 + IRQ_KBD:
-            keyboard_callback(cpu_state);
+            keyboard_callback(context);
             lapic_eoi();
             break;
         case T_IRQ0 + IRQ_SPUR:
             printf("SPURIOUS!\n");
             break;
         case T_IRQ0 + IRQ_TIMER:
-            printf(".");
+            new_context = schedule_next(context);
             lapic_eoi();
             break;
         default:
             printf("Unregistered ISR %d\n", int_no);
         }
     }
+
+    return new_context;
 }

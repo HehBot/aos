@@ -16,114 +16,24 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <task.h>
 
-#define NTASK 20
-
-typedef struct task {
-    size_t tid;
-
-    virt_addr_t user_stack;
-    virt_addr_t kernel_stack;
-
-    virt_addr_t rip;
-
-    enum {
-        TASK_S_INVALID = 0,
-        TASK_S_READY,
-        TASK_S_RUNNING,
-    } state;
-
-    pgdir_t pgdir;
-} task_t;
-
-struct {
-    task_t list[NTASK];
-    spinlock_t lock;
-    int next_tid;
-} tasks = { .next_tid = 1 };
-
-task_t* setup_task(fs_node_t* prog)
+void kernel_task_1_func()
 {
-    pgdir_t pgdir = paging_new_pgdir();
-
-    size_t nr_pages = PAGE_ROUND_UP(prog->length) / PAGE_SIZE;
-
-    char* z = (virt_addr_t)0x0;
-
-    for (size_t i = 0; i < nr_pages; ++i) {
-        phys_addr_t frame = frame_allocator_get_frame();
-        ASSERT((frame & FRAME_ALLOCATOR_ERROR) == 0);
-        ASSERT(paging_map(pgdir, z + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_U | PTE_W | PTE_P) == PAGING_OK);
+    while (1) {
+        printf("hello from kernel task 1!\n");
+        for (int i = 0; i < 100000000 / 3; ++i)
+            ;
     }
-
-    switch_pgdir(pgdir);
-    read_fs(prog, 0, prog->length, z);
-    switch_kernel_pgdir();
-
-    void* kernel_stack = kpalloc(3);
-    phys_addr_t frame = paging_kernel_unmap(kernel_stack, PAGE_4KiB);
-    ASSERT((frame & PAGING_ERROR) == 0);
-    ASSERT(frame_allocator_free_frame(frame) == FRAME_ALLOCATOR_OK);
-    kernel_stack = kernel_stack + 3 * PAGE_SIZE;
-
-    int slot = -1;
-    for (int i = 0; i < NTASK; ++i) {
-        if (tasks.list[i].state == TASK_S_INVALID) {
-            slot = i;
-            break;
-        }
-    }
-    ASSERT(slot != -1);
-    task_t* task = &tasks.list[slot];
-
-    *task = (task_t) {
-        .tid = tasks.next_tid,
-        .kernel_stack = kernel_stack,
-        .rip = z,
-        .state = TASK_S_READY,
-        .pgdir = pgdir,
-    };
-    tasks.next_tid++;
-
-    return task;
 }
 
-void swtch(task_t* t)
+void kernel_task_2_func()
 {
-    switch_pgdir(t->pgdir);
-    asm volatile(
-        "pushfq;"
-        "pop %%r11;"
-        "mov %q0, %%rsp;"
-        "mov %q1, %%rcx;"
-        "sysretq"
-        :
-        : "r"(t->user_stack), "r"(t->rip));
-}
-
-void sched()
-{
-    acquire(&tasks.lock);
-
-    cpu_t* c = get_cpu();
-    ASSERT(c->curr_task != NULL);
-
-    task_t* next_task = NULL;
-
-    for (int i = 0; i < NTASK; ++i) {
-        if (tasks.list[i].state == TASK_S_READY) {
-            next_task = &tasks.list[i];
-            break;
-        }
+    while (1) {
+        printf("hello from kernel task 2!\n");
+        for (int i = 0; i < 100000000 / 3; ++i)
+            ;
     }
-    if (next_task != NULL) {
-        c->curr_task->state = TASK_S_READY;
-        c->curr_task = next_task;
-        c->curr_task->state = TASK_S_RUNNING;
-    }
-    release(&tasks.lock);
-
-    swtch(c->curr_task);
 }
 
 void main(phys_addr_t phys_addr_mboot_info)
@@ -180,20 +90,42 @@ void main(phys_addr_t phys_addr_mboot_info)
 
     init_kpalloc(heap_start);
 
-    pgdir_t kpgdir = paging_new_pgdir();
+    pgdir_t _kpgdir = paging_new_pgdir();
 
-    fs_node_t* root = read_initrd(initrd_start);
+    task_t* kernel_task = new_task(1);
+    {
+        kernel_task->context->rip = (uintptr_t)kernel_task_1_func;
+        kernel_task->state = TASK_S_READY;
+    }
 
-    fs_node_t* user_prog = find_dir_fs(root, "user_prog");
+    task_t* kernel_task2 = new_task(1);
+    {
+        kernel_task2->context->rip = (uintptr_t)kernel_task_2_func;
+        kernel_task2->state = TASK_S_READY;
+    }
 
-    task_t* init_task = setup_task(user_prog);
-    init_task->state = TASK_S_RUNNING;
-    get_cpu()->curr_task = init_task;
+    task_t* user_task = new_task(0);
+    {
+        fs_node_t* root = read_initrd(initrd_start);
+        fs_node_t* user_prog = find_dir_fs(root, "user_prog");
+        char* z = (virt_addr_t)0x0;
+        {
+            size_t nr_pages = PAGE_ROUND_UP(user_prog->length) / PAGE_SIZE;
+            for (size_t i = 0; i < nr_pages; ++i) {
+                phys_addr_t frame = frame_allocator_get_frame();
+                ASSERT((frame & FRAME_ALLOCATOR_ERROR) == 0);
+                ASSERT(paging_map(user_task->pgdir, z + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_U | PTE_W | PTE_P) == PAGING_OK);
+            }
+        }
+        switch_pgdir(user_task->pgdir);
+        read_fs(user_prog, 0, user_prog->length, z);
+        switch_kernel_pgdir();
+        user_task->context->rip = (uintptr_t)z;
+        user_task->state = TASK_S_READY;
+    }
 
     __sync_synchronize();
     enable_interrupts();
-
-    sched();
 
     while (1)
         hlt();

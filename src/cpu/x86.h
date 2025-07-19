@@ -45,12 +45,16 @@ typedef struct {
 
     // pushed by cpu
     uint64_t rip;
-    uint64_t cs;
+    uint16_t cs;
+    uint16_t : 16;
+    uint32_t : 32;
     uint64_t rflags;
     uint64_t rsp;
-    uint64_t ss;
-} __attribute__((packed)) cpu_state_t;
-typedef void (*isr_t)(cpu_state_t*);
+    uint16_t ss;
+    uint16_t : 16;
+    uint32_t : 32;
+} __attribute__((packed)) context_t;
+typedef void (*isr_t)(context_t*);
 
 typedef struct {
     uint16_t low_offset;

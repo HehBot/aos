@@ -190,7 +190,7 @@ static char letter(uint8_t scancode)
     return 0;
 }
 
-void keyboard_callback(cpu_state_t*)
+void keyboard_callback(context_t*)
 {
     uint8_t status = port_read_byte(PORT_KEYBOARD_CTRL);
     while (status & 0x1) {

@@ -6,7 +6,7 @@ main:
         mov     rsi, message_end-message
         syscall
 
-        mov     rax, 1000000000
+        mov     rax, 100000000
 .label:
         dec     rax
         test    rax, rax

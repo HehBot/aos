@@ -151,22 +151,6 @@ void ega_putc(char character)
     ega_putc_spl(character, -1, -1, EGA_COLOR_BLACK, EGA_COLOR_WHITE);
 }
 
-static void print_stack(int skip)
-{
-    uintptr_t* rbp;
-    asm volatile("mov %%rbp, %0" : "=r"(rbp));
-
-    for (int i = 0; i < skip; ++i)
-        rbp = (uintptr_t*)(*rbp);
-    printf("\nStack call trace:\n");
-    for (int i = 0; i < 4; ++i) {
-        uintptr_t rip = *(rbp + 1);
-        printf("     #%d %lx\n", i, rip);
-        rbp = (uintptr_t*)(*rbp);
-        if (rbp == 0)
-            break;
-    }
-}
 void __attribute__((format(printf, 1, 2))) panic(char const* fmt, ...)
 {
     va_list ap;
@@ -176,8 +160,6 @@ void __attribute__((format(printf, 1, 2))) panic(char const* fmt, ...)
     disable_interrupts();
 
     vprintf(fmt, ap);
-
-    print_stack(1);
 
     hlt();
 
