@@ -22,11 +22,18 @@ static virt_addr_t map_temp(phys_addr_t pa)
     return buf_page;
 }
 
-static pgdir_t curr_pgdir;
+static pgdir_t kpgdir;
 
 static int kern_pgdir_setup = 0;
 static section_info_t kern_sections[4];
 static size_t nr_kern_sections;
+
+static int is_va_kernel_managed(virt_addr_t addr)
+{
+    extern void* KERN_BASE;
+    int index = VA_P4_INDEX(addr);
+    return (index == 256 || index == VA_P4_INDEX(&KERN_BASE));
+}
 
 pgdir_t paging_new_pgdir()
 {
@@ -40,16 +47,21 @@ pgdir_t paging_new_pgdir()
 
         /*
          * add heap mapping
+         * these are owned by the kernel, hence no PTE_U
          */
-        new_pgdir.p4->entries[256] = PTE(PTE_FRAME(curr_pgdir.p4->entries[256]), PTE_U | PTE_W | PTE_P);
+        new_pgdir.p4->entries[256] = PTE(PTE_FRAME(kpgdir.p4->entries[256]), PTE_W | PTE_P);
 
         /*
-         * add kernel mappping
+         * add kernel mapping
+         * these are owned by the kernel, hence no PTE_U
          */
         phys_addr_t phys_addr_p3 = frame_allocator_get_frame();
         ASSERT((phys_addr_p3 & FRAME_ALLOCATOR_ERROR) == 0);
-        new_pgdir.p4->entries[VA_P4_INDEX(&KERN_BASE)] = PTE(phys_addr_p3, PTE_U | PTE_W | PTE_P);
+        new_pgdir.p4->entries[VA_P4_INDEX(&KERN_BASE)] = PTE(phys_addr_p3, PTE_W | PTE_P);
 
+        /*
+         * PTE_U will be included in every other level
+         */
         page_table_t* p3 = map_temp(phys_addr_p3);
         memset(p3, 0, sizeof(*p3));
         phys_addr_t phys_addr_p2 = frame_allocator_get_frame();
@@ -86,9 +98,9 @@ pgdir_t paging_new_pgdir()
         /*
          * switch to proper kernel pgdir
          */
-        phys_addr_t phys_addr_p4 = paging_translate_page(new_pgdir.p4, PAGE_4KiB);
+        phys_addr_t phys_addr_p4 = paging_kernel_translate_page(new_pgdir.p4, PAGE_4KiB);
         write_cr3(phys_addr_p4);
-        curr_pgdir = new_pgdir;
+        kpgdir = new_pgdir;
 
         /*
          * unmap boot kernel pgdir (to act as stack guard)
@@ -100,19 +112,19 @@ pgdir_t paging_new_pgdir()
         };
         for (size_t i = 0; i < 3; ++i) {
             virt_addr_t old_p = kernel_static_from_phys_addr(old_phys[i]);
-            phys_addr_t frame = paging_unmap(old_p, PAGE_4KiB);
+            phys_addr_t frame = paging_kernel_unmap(old_p, PAGE_4KiB);
             ASSERT((frame & PAGING_ERROR) == 0);
             ASSERT(frame_allocator_free_frame(frame) == FRAME_ALLOCATOR_OK);
         }
 
         kern_pgdir_setup = 1;
-        return curr_pgdir;
+        return kpgdir;
     } else {
         pgdir_t new_pgdir;
         new_pgdir.p4 = kpalloc(1);
         ASSERT(new_pgdir.p4 != NULL);
 
-        memcpy(new_pgdir.p4, curr_pgdir.p4, sizeof(*new_pgdir.p4));
+        memcpy(new_pgdir.p4, kpgdir.p4, sizeof(*new_pgdir.p4));
         return new_pgdir;
     }
 }
@@ -158,7 +170,7 @@ void init_paging(section_info_t* section_info, size_t nr_sections)
      */
     p4->entries[0] = init_p3->entries[0] = 0;
 
-    curr_pgdir.p4 = p4;
+    kpgdir.p4 = p4;
 
     flush_tlb_all();
 
@@ -166,10 +178,11 @@ void init_paging(section_info_t* section_info, size_t nr_sections)
     nr_kern_sections = nr_sections;
 }
 
-static int page_walk(virt_addr_t addr, page_table_level_t level, page_table_t** ret)
+static int page_walk(pgdir_t pgdir, virt_addr_t addr, page_table_level_t level, page_table_t** ret)
 {
     page_table_level_t curr_level = PAGE_TABLE_P4;
-    page_table_t* curr_page_table = curr_pgdir.p4;
+    page_table_t* curr_page_table = pgdir.p4;
+
     while (1) {
         if (curr_level == level)
             break;
@@ -190,11 +203,11 @@ static int page_walk(virt_addr_t addr, page_table_level_t level, page_table_t** 
     *ret = curr_page_table;
     return PAGING_OK;
 }
-static noignore int get_pte(virt_addr_t page, page_type_t type, pte_t** ret)
+static noignore int get_pte(pgdir_t pgdir, virt_addr_t page, page_type_t type, pte_t** ret)
 {
     page_table_level_t parent_level = page_type_parent_table_level(type);
     page_table_t* parent_table;
-    int err = page_walk(page, parent_level, &parent_table);
+    int err = page_walk(pgdir, page, parent_level, &parent_table);
     if (err != PAGING_OK)
         return err;
 
@@ -206,14 +219,13 @@ static noignore int get_pte(virt_addr_t page, page_type_t type, pte_t** ret)
     return PAGING_OK;
 }
 
-int paging_map_with_table_flags(virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags, pte_flags_t parent_table_flags)
+static int paging_map_with_table_flags_internal(pgdir_t pgdir, virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags, pte_flags_t parent_table_flags)
 {
     page_table_level_t parent_level = page_type_parent_table_level(type);
-
     parent_table_flags &= ~PTE_HP;
-
     page_table_level_t curr_level = PAGE_TABLE_P4;
-    page_table_t* curr_page_table = curr_pgdir.p4;
+    page_table_t* curr_page_table = pgdir.p4;
+
     while (1) {
         if (curr_level == parent_level)
             break;
@@ -248,16 +260,30 @@ int paging_map_with_table_flags(virt_addr_t page, phys_addr_t frame, page_type_t
 
     return PAGING_OK;
 }
-
-int paging_map(virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags)
+int paging_map_with_table_flags(pgdir_t pgdir, virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags, pte_flags_t parent_table_flags)
 {
-    return paging_map_with_table_flags(page, frame, type, flags, PTE_U | PTE_W | PTE_P);
+    ASSERT(!is_va_kernel_managed(page));
+    return paging_map_with_table_flags_internal(pgdir, page, frame, type, flags, parent_table_flags);
+}
+int paging_kernel_map_with_table_flags(virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags, pte_flags_t parent_table_flags)
+{
+    ASSERT(is_va_kernel_managed(page));
+    return paging_map_with_table_flags_internal(kpgdir, page, frame, type, flags, parent_table_flags);
 }
 
-phys_addr_t paging_unmap(virt_addr_t page, page_type_t type)
+int paging_map(pgdir_t pgdir, virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags)
+{
+    return paging_map_with_table_flags(pgdir, page, frame, type, flags, PTE_U | PTE_W | PTE_P);
+}
+int paging_kernel_map(virt_addr_t page, phys_addr_t frame, page_type_t type, pte_flags_t flags)
+{
+    return paging_kernel_map_with_table_flags(page, frame, type, flags, PTE_U | PTE_W | PTE_P);
+}
+
+static phys_addr_t paging_unmap_internal(pgdir_t pgdir, virt_addr_t page, page_type_t type)
 {
     pte_t* pte;
-    int err = get_pte(page, type, &pte);
+    int err = get_pte(pgdir, page, type, &pte);
     if (err != PAGING_OK)
         return err;
 
@@ -267,31 +293,61 @@ phys_addr_t paging_unmap(virt_addr_t page, page_type_t type)
     flush_tlb(page);
     return frame;
 }
+phys_addr_t paging_unmap(pgdir_t pgdir, virt_addr_t page, page_type_t type)
+{
+    ASSERT(!is_va_kernel_managed(page));
+    return paging_unmap_internal(pgdir, page, type);
+}
+phys_addr_t paging_kernel_unmap(virt_addr_t page, page_type_t type)
+{
+    ASSERT(is_va_kernel_managed(page));
+    return paging_unmap_internal(kpgdir, page, type);
+}
 
-phys_addr_t paging_translate_page(virt_addr_t page, page_type_t type)
+static phys_addr_t paging_translate_page_internal(pgdir_t pgdir, virt_addr_t page, page_type_t type)
 {
     pte_t* pte;
-    int err = get_pte(page, type, &pte);
+    int err = get_pte(pgdir, page, type, &pte);
     if (err != PAGING_OK)
         return err;
 
     return PTE_FRAME(*pte);
 }
+phys_addr_t paging_translate_page(pgdir_t pgdir, virt_addr_t page, page_type_t type)
+{
+    ASSERT(!is_va_kernel_managed(page));
+    return paging_translate_page_internal(pgdir, page, type);
+}
+phys_addr_t paging_kernel_translate_page(virt_addr_t page, page_type_t type)
+{
+    ASSERT(is_va_kernel_managed(page));
+    return paging_translate_page_internal(kpgdir, page, type);
+}
 
-pte_t paging_show_pte(virt_addr_t page, page_type_t type)
+static pte_t paging_show_pte_internal(pgdir_t pgdir, virt_addr_t page, page_type_t type)
 {
     pte_t* pte;
-    int err = get_pte(page, type, &pte);
+    int err = get_pte(pgdir, page, type, &pte);
     if (err != PAGING_OK)
         return err;
 
     return *pte;
 }
+pte_t paging_show_pte(pgdir_t pgdir, virt_addr_t page, page_type_t type)
+{
+    ASSERT(!is_va_kernel_managed(page));
+    return paging_show_pte_internal(pgdir, page, type);
+}
+pte_t paging_kernel_show_pte(virt_addr_t page, page_type_t type)
+{
+    ASSERT(is_va_kernel_managed(page));
+    return paging_show_pte_internal(kpgdir, page, type);
+}
 
-noignore int paging_update_flags(virt_addr_t page, page_type_t type, pte_flags_t flags)
+noignore int paging_update_flags(pgdir_t pgdir, virt_addr_t page, page_type_t type, pte_flags_t flags)
 {
     pte_t* pte;
-    int err = get_pte(page, type, &pte);
+    int err = get_pte(pgdir, page, type, &pte);
     if (err != PAGING_OK)
         return err;
 
@@ -300,4 +356,14 @@ noignore int paging_update_flags(virt_addr_t page, page_type_t type, pte_flags_t
     flush_tlb(page);
 
     return PAGING_OK;
+}
+
+void switch_pgdir(pgdir_t pgdir)
+{
+    phys_addr_t phys_addr_p4 = paging_kernel_translate_page(pgdir.p4, PAGE_4KiB);
+    write_cr3(phys_addr_p4);
+}
+void switch_kernel_pgdir()
+{
+    switch_pgdir(kpgdir);
 }

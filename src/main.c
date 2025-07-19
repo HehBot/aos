@@ -39,10 +39,13 @@ typedef struct task {
 struct {
     task_t list[NTASK];
     spinlock_t lock;
-} tasks = {};
+    int next_tid;
+} tasks = { .next_tid = 1 };
 
-void setup_task(fs_node_t* prog, int tid, int slot)
+task_t* setup_task(fs_node_t* prog)
 {
+    pgdir_t pgdir = paging_new_pgdir();
+
     size_t nr_pages = PAGE_ROUND_UP(prog->length) / PAGE_SIZE;
 
     char* z = (virt_addr_t)0x0;
@@ -50,27 +53,44 @@ void setup_task(fs_node_t* prog, int tid, int slot)
     for (size_t i = 0; i < nr_pages; ++i) {
         phys_addr_t frame = frame_allocator_get_frame();
         ASSERT((frame & FRAME_ALLOCATOR_ERROR) == 0);
-        ASSERT(paging_map(z + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_U | PTE_W | PTE_P) == PAGING_OK);
+        ASSERT(paging_map(pgdir, z + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_U | PTE_W | PTE_P) == PAGING_OK);
     }
 
+    switch_pgdir(pgdir);
     read_fs(prog, 0, prog->length, z);
+    switch_kernel_pgdir();
 
     void* kernel_stack = kpalloc(3);
-    phys_addr_t frame = paging_unmap(kernel_stack, PAGE_4KiB);
+    phys_addr_t frame = paging_kernel_unmap(kernel_stack, PAGE_4KiB);
     ASSERT((frame & PAGING_ERROR) == 0);
     ASSERT(frame_allocator_free_frame(frame) == FRAME_ALLOCATOR_OK);
     kernel_stack = kernel_stack + 3 * PAGE_SIZE;
 
-    tasks.list[slot] = (task_t) {
-        .tid = tid,
+    int slot = -1;
+    for (int i = 0; i < NTASK; ++i) {
+        if (tasks.list[i].state == TASK_S_INVALID) {
+            slot = i;
+            break;
+        }
+    }
+    ASSERT(slot != -1);
+    task_t* task = &tasks.list[slot];
+
+    *task = (task_t) {
+        .tid = tasks.next_tid,
         .kernel_stack = kernel_stack,
         .rip = z,
         .state = TASK_S_READY,
+        .pgdir = pgdir,
     };
+    tasks.next_tid++;
+
+    return task;
 }
 
 void swtch(task_t* t)
 {
+    switch_pgdir(t->pgdir);
     asm volatile(
         "pushfq;"
         "pop %%r11;"
@@ -144,7 +164,7 @@ void main(phys_addr_t phys_addr_mboot_info)
 
     virt_addr_t initrd_start = heap_start;
     for (phys_addr_t frame = mod_start_frame; frame <= mod_end_frame; heap_start += PAGE_SIZE, frame += PAGE_SIZE)
-        ASSERT(paging_map(heap_start, frame, PAGE_4KiB, PTE_P | PTE_W | PTE_U) == PAGING_OK);
+        ASSERT(paging_kernel_map(heap_start, frame, PAGE_4KiB, PTE_P | PTE_W) == PAGING_OK);
 
     init_idt();
     init_cpu(); // needs get_cpu which needs lapic initialised
@@ -166,8 +186,9 @@ void main(phys_addr_t phys_addr_mboot_info)
 
     fs_node_t* user_prog = find_dir_fs(root, "user_prog");
 
-    setup_task(user_prog, 1, 0);
-    get_cpu()->curr_task = &tasks.list[0];
+    task_t* init_task = setup_task(user_prog);
+    init_task->state = TASK_S_RUNNING;
+    get_cpu()->curr_task = init_task;
 
     __sync_synchronize();
     enable_interrupts();

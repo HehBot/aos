@@ -8,7 +8,6 @@ GDB := gdb
 NAME := aos
 SRC_DIR := src
 INITRD_DIR := initrd
-FS_DIR := user
 BUILD_DIR := build
 
 SRCS := $(shell find $(SRC_DIR) -name "*.c" -or -name "*.S")
@@ -30,6 +29,7 @@ INC_FLAGS = -I$(SRC_DIR) -I$(SRC_DIR)/util
 ASMFLAGS := -c -g
 CFLAGS := -c -g \
 		  -Wall -Wextra -Werror -Wno-unused-variable \
+		  -fno-omit-frame-pointer -O0 \
 		  -ffreestanding -fno-asynchronous-unwind-tables \
 		  -mno-red-zone -mno-sse \
 		  -nostdlib \
@@ -75,9 +75,6 @@ $(ROOTLOCK): $(KERNEL) $(INITRD) grub.cfg
 $(INITRD): .FORCE
 	@$(MAKE) -C $(INITRD_DIR)
 
-$(FS_IMG): .FORCE
-	@$(MAKE) -C $(FS_DIR)
-
 $(KERNEL): $(OBJS) linker.ld
 	@mkdir -p $(dir $@)
 	$(LD) $(LDFLAGS) -o $@ $(OBJS) # -flto
@@ -97,7 +94,6 @@ $(BUILD_DIR)/%.S.o: %.S
 clean:
 	$(RM) -r $(BUILD_DIR)
 	$(MAKE) -C $(INITRD_DIR) clean
-	$(MAKE) -C $(FS_DIR) clean
 
 .FORCE:
 .PHONY: run_cdrom run_disk debug disk bootdisk bootcdrom clean

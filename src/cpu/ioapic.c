@@ -45,7 +45,7 @@ void init_ioapic(virt_addr_t* mapping_addr_ptr, phys_addr_t ioapic_addr, uint8_t
 
     int err = frame_allocator_reserve_frame(ioapic_addr);
     ASSERT(err == FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME);
-    err = paging_map(*mapping_addr_ptr, ioapic_addr, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
+    err = paging_kernel_map(*mapping_addr_ptr, ioapic_addr, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
     ASSERT(err == PAGING_OK);
     *mapping_addr_ptr += PAGE_SIZE;
 

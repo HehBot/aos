@@ -74,6 +74,11 @@ static inline size_t page_size(page_type_t type)
     #define PAGE_ROUND_DOWN(a) (((a) >> PAGE_ORDER) << PAGE_ORDER)
     #define PAGE_ROUND_UP(a) PAGE_ROUND_DOWN((a) + PAGE_SIZE - 1)
 
+typedef struct page_table page_table_t;
+typedef struct pgdir {
+    page_table_t* p4;
+} pgdir_t;
+
 #endif
 
 #endif // PAGE_H

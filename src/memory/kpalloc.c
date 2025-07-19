@@ -55,7 +55,7 @@ void init_kpalloc(virt_addr_t heap_start)
     for (size_t i = 0; i < POOL_SZ * sizeof(pool[0]); i += PAGE_SIZE, heap_start += PAGE_SIZE) {
         phys_addr_t frame = frame_allocator_get_frame();
         ASSERT((frame & FRAME_ALLOCATOR_ERROR) == 0);
-        int err = paging_map(heap_start, frame, PAGE_4KiB, PTE_NX | PTE_P | PTE_W);
+        int err = paging_kernel_map(heap_start, frame, PAGE_4KiB, PTE_NX | PTE_P | PTE_W);
         ASSERT(err == PAGING_OK);
     }
     memset(pool, 0, POOL_SZ * (sizeof pool[0]));
@@ -73,7 +73,7 @@ void init_kpalloc(virt_addr_t heap_start)
     for (size_t i = 0; i < INIT_NR_PAGES; ++i) {
         phys_addr_t frame = frame_allocator_get_frame();
         ASSERT((frame & FRAME_ALLOCATOR_ERROR) == 0);
-        int err = paging_map(heap_start + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
+        int err = paging_kernel_map(heap_start + i * PAGE_SIZE, frame, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
         ASSERT(err == PAGING_OK);
     }
 }
@@ -102,7 +102,7 @@ void* kpalloc(size_t n)
         for (virt_addr_t page = end; page < end + nr * PAGE_SIZE; page += PAGE_SIZE) {
             phys_addr_t frame = frame_allocator_get_frame();
             ASSERT((frame & FRAME_ALLOCATOR_ERROR) == 0);
-            int err = paging_map(page, frame, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
+            int err = paging_kernel_map(page, frame, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
             ASSERT(err == PAGING_OK);
         }
 

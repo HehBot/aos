@@ -35,7 +35,7 @@ void init_ega(struct multiboot_tag_framebuffer const* fbinfo, virt_addr_t* mappi
         for (phys_addr_t frame = first_frame; frame <= last_frame; frame += PAGE_SIZE, addr += PAGE_SIZE) {
             int err = frame_allocator_reserve_frame(frame);
             ASSERT(err == FRAME_ALLOCATOR_ERROR_NO_SUCH_FRAME);
-            err = paging_map(addr, frame, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
+            err = paging_kernel_map(addr, frame, PAGE_4KiB, PTE_NX | PTE_W | PTE_P);
             ASSERT(err == PAGING_OK);
         }
         *mapping_addr_ptr = addr;
@@ -151,6 +151,22 @@ void ega_putc(char character)
     ega_putc_spl(character, -1, -1, EGA_COLOR_BLACK, EGA_COLOR_WHITE);
 }
 
+static void print_stack(int skip)
+{
+    uintptr_t* rbp;
+    asm volatile("mov %%rbp, %0" : "=r"(rbp));
+
+    for (int i = 0; i < skip; ++i)
+        rbp = (uintptr_t*)(*rbp);
+    printf("\nStack call trace:\n");
+    for (int i = 0; i < 4; ++i) {
+        uintptr_t rip = *(rbp + 1);
+        printf("     #%d %lx\n", i, rip);
+        rbp = (uintptr_t*)(*rbp);
+        if (rbp == 0)
+            break;
+    }
+}
 void __attribute__((format(printf, 1, 2))) panic(char const* fmt, ...)
 {
     va_list ap;
@@ -160,6 +176,9 @@ void __attribute__((format(printf, 1, 2))) panic(char const* fmt, ...)
     disable_interrupts();
 
     vprintf(fmt, ap);
+
+    print_stack(1);
+
     hlt();
 
     __builtin_unreachable();

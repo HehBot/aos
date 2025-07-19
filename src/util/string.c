@@ -55,9 +55,10 @@ size_t strlen(char const* s)
 }
 int strcmp(char const* s1, char const* s2)
 {
-    while ((*s1) && (*s2) && (*(s1++) == *(s2++)))
-        ;
-    return (*s1 - *s2);
+    size_t i = 0;
+    while (s1[i] == s2[i] && s1[i] && s2[i])
+        ++i;
+    return (s1[i] - s2[i]);
 }
 
 int memcmp(void const* s1, void const* s2, size_t n)
