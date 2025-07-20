@@ -36,8 +36,9 @@ void acquire(spinlock_t* lock)
     pushcli();
     ASSERT(!holding(lock));
 
-    while (!__sync_bool_compare_and_swap(&lock->locked, 0, 1))
-        ;
+    do {
+        asm volatile("pause" : : : "memory");
+    } while (!__sync_bool_compare_and_swap(&lock->locked, 0, 1));
 
     lock->held_by = get_cpu();
 }

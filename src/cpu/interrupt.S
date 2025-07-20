@@ -39,11 +39,6 @@ isr_stub:
         cld
         call    isr_common
 
-        test    %rax, %rax
-        jz      .dont_replace_stack
-        mov     %rax, %rsp
-.dont_replace_stack:
-
         pop     %r15
         pop     %r14
         pop     %r13

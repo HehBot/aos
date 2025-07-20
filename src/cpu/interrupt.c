@@ -158,9 +158,8 @@ Registers at exception:\n\
 
 context_t* schedule_next(context_t* context);
 
-context_t* isr_common(context_t* context)
+void isr_common(context_t* context)
 {
-    context_t* new_context = NULL;
     int int_no = context->int_no;
     void keyboard_callback(context_t*);
     if (int_no < 32)
@@ -175,13 +174,12 @@ context_t* isr_common(context_t* context)
             printf("SPURIOUS!\n");
             break;
         case T_IRQ0 + IRQ_TIMER:
-            new_context = schedule_next(context);
+            printf("<TIMER>");
+            schedule_next(context);
             lapic_eoi();
             break;
         default:
             printf("Unregistered ISR %d\n", int_no);
         }
     }
-
-    return new_context;
 }

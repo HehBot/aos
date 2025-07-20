@@ -19,12 +19,12 @@ typedef struct {
 
     struct {
         uint64_t _scratch_rsp;
-        uint64_t kstack_rsp;
+        uint64_t kernel_stack_rsp;
     } __attribute__((packed)) syscall_info;
 
     uint8_t acpi_proc_id;
     uint8_t lapic_id;
-    uint8_t kstack[1200] __attribute__((aligned(16)));
+    uint8_t interrupt_kernel_stack[1200] __attribute__((aligned(16)));
 } cpu_t;
 
 #define MAX_CPUS 32

@@ -94,13 +94,13 @@ void main(phys_addr_t phys_addr_mboot_info)
 
     task_t* kernel_task = new_task(1);
     {
-        kernel_task->context->rip = (uintptr_t)kernel_task_1_func;
+        kernel_task->context.rip = (uintptr_t)kernel_task_1_func;
         kernel_task->state = TASK_S_READY;
     }
 
     task_t* kernel_task2 = new_task(1);
     {
-        kernel_task2->context->rip = (uintptr_t)kernel_task_2_func;
+        kernel_task2->context.rip = (uintptr_t)kernel_task_2_func;
         kernel_task2->state = TASK_S_READY;
     }
 
@@ -120,7 +120,7 @@ void main(phys_addr_t phys_addr_mboot_info)
         switch_pgdir(user_task->pgdir);
         read_fs(user_prog, 0, user_prog->length, z);
         switch_kernel_pgdir();
-        user_task->context->rip = (uintptr_t)z;
+        user_task->context.rip = (uintptr_t)z;
         user_task->state = TASK_S_READY;
     }
 
@@ -138,6 +138,9 @@ typedef struct {
 
 void syscall_handler(syscall_t* s)
 {
+    printf("<SYSCALL START>");
+    for (int i = 0; i < 10000000; ++i)
+        ;
     switch (s->nr) {
     case 0: {
         char* str = kmalloc(s->args[1] + 1);
@@ -149,4 +152,5 @@ void syscall_handler(syscall_t* s)
     default:
         printf("[unknown syscall#%lu]\n", s->nr);
     }
+    printf("<SYSCALL END>");
 }

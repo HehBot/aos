@@ -33,10 +33,10 @@ init_syscall_sysret:
         wrmsr
 
         // set SFMASK MSR
-        // disable interrupts, clear direction flag
+        // clear direction flag
         mov $0xc0000084, %rcx
         rdmsr
-        or $(1 << 9 | 1 << 10), %eax
+        or $(1 << 10), %eax
         wrmsr
 
         // set SYSCALL/SYSRET bit in EFER MSR

@@ -8,8 +8,9 @@ typedef struct task {
     size_t tid;
 
     virt_addr_t kernel_stack;
+    virt_addr_t kernel_stack_rsp;
 
-    context_t* context;
+    context_t context;
 
     enum {
         TASK_S_INVALID = 0,

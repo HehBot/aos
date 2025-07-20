@@ -19,10 +19,8 @@ struct {
     int next_tid;
 } tasks = { .next_tid = 1 };
 
-context_t* schedule_next(context_t* const context)
+void schedule_next(context_t* context)
 {
-    context_t* new_context = NULL;
-
     acquire(&tasks.lock);
 
     cpu_t* c = get_cpu();
@@ -49,19 +47,17 @@ context_t* schedule_next(context_t* const context)
         task_t* next_task = &tasks.list[next_slot];
         if (c->curr_task != NULL) {
             c->curr_task->state = TASK_S_READY;
-            c->curr_task->context = context;
+            c->curr_task->context = *context;
         }
-        new_context = next_task->context;
+        *context = next_task->context;
         switch_pgdir(next_task->pgdir);
         next_task->state = TASK_S_RUNNING;
         c->curr_task = next_task;
-        c->syscall_info.kstack_rsp = (uintptr_t)next_task->kernel_stack;
-        c->tss.ist[INTERRUPT_IST] = (uintptr_t)next_task->kernel_stack;
+        c->syscall_info.kernel_stack_rsp = (uintptr_t)next_task->kernel_stack_rsp;
+        printf("<SWITCH TID %lu>", next_task->tid);
     }
 
     release(&tasks.lock);
-
-    return new_context;
 }
 
 task_t* new_task(int is_kernel_task)
@@ -72,7 +68,7 @@ task_t* new_task(int is_kernel_task)
     phys_addr_t frame = paging_kernel_unmap(kernel_stack, PAGE_4KiB);
     ASSERT((frame & PAGING_ERROR) == 0);
     ASSERT(frame_allocator_free_frame(frame) == FRAME_ALLOCATOR_OK);
-    kernel_stack = kernel_stack + 3 * PAGE_SIZE;
+    virt_addr_t kernel_stack_rsp = kernel_stack + 3 * PAGE_SIZE;
 
     void* task_stack = (void*)((uintptr_t)0x800000000000 - 16);
     {
@@ -89,8 +85,7 @@ task_t* new_task(int is_kernel_task)
         }
     }
 
-    context_t* context = (kernel_stack - sizeof(*context));
-    *context = (context_t) {
+    context_t context = (context_t) {
         .rip = (uintptr_t)0, // needs to be set by caller
         .cs = (is_kernel_task ? KERNEL_CODE_SEG : USER_CODE_SEG),
         .rflags = RFLAGS_INT,
@@ -106,6 +101,7 @@ task_t* new_task(int is_kernel_task)
             *task = (task_t) {
                 .tid = tasks.next_tid,
                 .kernel_stack = kernel_stack,
+                .kernel_stack_rsp = kernel_stack_rsp,
                 .context = context,
                 .state = TASK_S_EMBRYO,
                 .pgdir = pgdir,

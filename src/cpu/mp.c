@@ -37,7 +37,7 @@ static void init_gdt(cpu_t* c)
     c->gdt[TSS_GDT_INDEX] = SEG_TSS1(KERNEL_PL, (uintptr_t)&c->tss, sizeof(c->tss));
     c->gdt[TSS_GDT_INDEX + 1] = SEG_TSS2((uintptr_t)&c->tss);
 
-    c->tss.ist[INTERRUPT_IST] = ((uintptr_t)&c->kstack[0]) + sizeof(c->kstack);
+    c->tss.ist[INTERRUPT_IST] = ((uintptr_t)&c->interrupt_kernel_stack[0]) + sizeof(c->interrupt_kernel_stack);
     c->tss.iomap_base = sizeof(tss_t);
 
     // to verify that excep_stack is indeed used, uncomment
@@ -55,7 +55,7 @@ void init_cpu(void)
     lgdt(&c->gdt[0], sizeof(c->gdt), KERNEL_CODE_SEG, KERNEL_DATA_SEG);
     ltr(TSS_SEG);
 
-    c->syscall_info.kstack_rsp = (uintptr_t)&c->kstack[0] + sizeof(c->kstack);
+    c->syscall_info.kernel_stack_rsp = 0; // will be set on task switch
     init_syscall_sysret((uintptr_t)&c->syscall_info);
 
     load_idt();
